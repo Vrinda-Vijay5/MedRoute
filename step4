@@ -1,0 +1,620 @@
+STEP 9 — Automatic Topology Discovery
+
+Now we're moving from a manually defined topology to a controller that can discover the switches and links itself.
+
+This is an important upgrade because the current controller knows:
+
+s1 — s2 — s4
+ \         /
+  \— s3 —/
+
+only because we manually wrote the graph and port mappings.
+
+For the final MedRoute system, we want:
+
+OpenFlow switches
+       ↓
+Ryu discovers topology
+       ↓
+Links + ports
+       ↓
+NetworkX graph
+       ↓
+Routing algorithm
+
+This gives us the foundation for later dynamic routing, congestion monitoring, and Braess-Paradox analysis.
+
+9.1 What we are changing
+Current Step 8
+self.graph.add_edge(1, 2, weight=1)
+self.graph.add_edge(2, 4, weight=1)
+...
+
+and:
+
+self.port_map = {...}
+
+These are hardcoded.
+
+Step 9
+
+Ryu will discover:
+
+s1 ↔ s2
+s1 ↔ s3
+s2 ↔ s4
+s3 ↔ s4
+
+and their corresponding ports.
+
+NetworkX will then build the graph automatically.
+
+9.2 Stop the current system
+Terminal 2 — Mininet
+
+You're currently inside:
+
+mininet>
+
+Run:
+
+exit
+Terminal 1 — Ryu
+
+Press:
+
+Ctrl+C
+Then clean Mininet
+sudo mn -c
+9.3 Install the topology API
+
+Ryu's topology discovery requires its topology modules.
+
+From your ~/medroute directory, run:
+
+python3 -c "from ryu.topology import event, api; print('Topology API OK')"
+
+You should get:
+
+Topology API OK
+
+If you get an error, stop and send me the error.
+
+9.4 Replace the controller
+
+Now run:
+
+cd ~/medroute
+
+Then replace the controller with this Step 9 version:
+
+cat > controller/medroute_controller.py <<'EOF'
+from ryu.base import app_manager
+from ryu.controller import ofp_event
+from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
+from ryu.controller.handler import set_ev_cls
+from ryu.ofproto import ofproto_v1_3
+from ryu.lib.packet import packet, ethernet, arp, ipv4
+from ryu.lib.packet import ether_types
+
+from ryu.topology import event
+from ryu.topology.api import get_switch, get_link
+
+import networkx as nx
+
+
+class MedRouteController(app_manager.RyuApp):
+
+    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+
+    def __init__(self, *args, **kwargs):
+        super(MedRouteController, self).__init__(*args, **kwargs)
+
+        self.logger.info("============================")
+        self.logger.info("MedRoute Controller Started")
+        self.logger.info("============================")
+
+        self.graph = nx.DiGraph()
+        self.datapaths = {}
+
+        self.host_switch = {
+            "10.0.0.1": 1,
+            "10.0.0.2": 4
+        }
+
+        self.host_port = {
+            "10.0.0.1": 1,
+            "10.0.0.2": 1
+        }
+
+        self.port_map = {}
+
+    @set_ev_cls(
+        ofp_event.EventOFPSwitchFeatures,
+        CONFIG_DISPATCHER
+    )
+    def switch_connected(self, ev):
+
+        datapath = ev.msg.datapath
+
+        self.datapaths[datapath.id] = datapath
+
+        self.logger.info(
+            "Switch connected: s%d",
+            datapath.id
+        )
+
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        match = parser.OFPMatch()
+
+        actions = [
+            parser.OFPActionOutput(
+                ofproto.OFPP_CONTROLLER,
+                ofproto.OFPCML_NO_BUFFER
+            )
+        ]
+
+        self.add_flow(
+            datapath,
+            priority=0,
+            match=match,
+            actions=actions
+        )
+
+    def add_flow(
+        self,
+        datapath,
+        priority,
+        match,
+        actions
+    ):
+
+        parser = datapath.ofproto_parser
+
+        instructions = [
+            parser.OFPInstructionActions(
+                datapath.ofproto.OFPIT_APPLY_ACTIONS,
+                actions
+            )
+        ]
+
+        mod = parser.OFPFlowMod(
+            datapath=datapath,
+            priority=priority,
+            match=match,
+            instructions=instructions
+        )
+
+        datapath.send_msg(mod)
+
+    @set_ev_cls(
+        event.EventSwitchEnter
+    )
+    def topology_changed(self, ev):
+
+        self.logger.info("Topology discovery triggered")
+
+        self.update_topology()
+
+    def update_topology(self):
+
+        self.graph.clear()
+        self.port_map.clear()
+
+        switches = get_switch(self, None)
+
+        for switch in switches:
+
+            switch_id = switch.dp.id
+
+            self.graph.add_node(switch_id)
+
+        links = get_link(self, None)
+
+        for link in links:
+
+            src = link.src.dpid
+            dst = link.dst.dpid
+            src_port = link.src.port_no
+
+            self.graph.add_edge(
+                src,
+                dst,
+                weight=1
+            )
+
+            self.port_map[
+                (src, dst)
+            ] = src_port
+
+            self.logger.info(
+                "Link discovered: s%d:%d -> s%d",
+                src,
+                src_port,
+                dst
+            )
+
+        self.logger.info(
+            "Discovered switches: %s",
+            list(self.graph.nodes())
+        )
+
+        self.logger.info(
+            "Discovered links: %s",
+            list(self.graph.edges())
+        )
+
+    @set_ev_cls(
+        ofp_event.EventOFPPacketIn,
+        MAIN_DISPATCHER
+    )
+    def packet_in_handler(self, ev):
+
+        msg = ev.msg
+
+        datapath = msg.datapath
+        in_port = msg.match["in_port"]
+
+        pkt = packet.Packet(msg.data)
+
+        eth = pkt.get_protocol(ethernet.ethernet)
+
+        if eth.ethertype == ether_types.ETH_TYPE_LLDP:
+            return
+
+        arp_pkt = pkt.get_protocol(arp.arp)
+
+        if arp_pkt:
+
+            self.handle_arp(
+                msg,
+                datapath,
+                in_port,
+                arp_pkt
+            )
+
+            return
+
+        ipv4_pkt = pkt.get_protocol(ipv4.ipv4)
+
+        if ipv4_pkt:
+
+            self.handle_ipv4(
+                msg,
+                datapath,
+                in_port,
+                ipv4_pkt
+            )
+
+    def handle_arp(
+        self,
+        msg,
+        datapath,
+        in_port,
+        arp_pkt
+    ):
+
+        src_ip = arp_pkt.src_ip
+        dst_ip = arp_pkt.dst_ip
+
+        self.logger.info(
+            "ARP: %s -> %s",
+            src_ip,
+            dst_ip
+        )
+
+        if dst_ip not in self.host_switch:
+            return
+
+        dst_switch = self.host_switch[dst_ip]
+        dst_port = self.host_port[dst_ip]
+
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        if datapath.id == dst_switch:
+
+            actions = [
+                parser.OFPActionOutput(dst_port)
+            ]
+
+        else:
+
+            try:
+
+                path = nx.shortest_path(
+                    self.graph,
+                    source=datapath.id,
+                    target=dst_switch,
+                    weight="weight"
+                )
+
+            except nx.NetworkXNoPath:
+
+                self.logger.warning(
+                    "No ARP path from s%d to s%d",
+                    datapath.id,
+                    dst_switch
+                )
+
+                return
+
+            next_switch = path[1]
+
+            out_port = self.port_map[
+                (datapath.id, next_switch)
+            ]
+
+            actions = [
+                parser.OFPActionOutput(out_port)
+            ]
+
+        out = parser.OFPPacketOut(
+            datapath=datapath,
+            buffer_id=msg.buffer_id,
+            in_port=in_port,
+            actions=actions,
+            data=msg.data
+            if msg.buffer_id == ofproto.OFP_NO_BUFFER
+            else None
+        )
+
+        datapath.send_msg(out)
+
+    def handle_ipv4(
+        self,
+        msg,
+        datapath,
+        in_port,
+        ipv4_pkt
+    ):
+
+        src_ip = ipv4_pkt.src
+        dst_ip = ipv4_pkt.dst
+
+        if (
+            src_ip not in self.host_switch
+            or dst_ip not in self.host_switch
+        ):
+
+            return
+
+        src_sw = self.host_switch[src_ip]
+        dst_sw = self.host_switch[dst_ip]
+
+        try:
+
+            path = nx.shortest_path(
+                self.graph,
+                source=src_sw,
+                target=dst_sw,
+                weight="weight"
+            )
+
+        except nx.NetworkXNoPath:
+
+            self.logger.warning(
+                "No path from %s to %s",
+                src_ip,
+                dst_ip
+            )
+
+            return
+
+        self.logger.info(
+            "Route %s -> %s : %s",
+            src_ip,
+            dst_ip,
+            path
+        )
+
+        self.install_path(
+            path,
+            src_ip,
+            dst_ip
+        )
+
+        self.forward_first_packet(
+            msg,
+            datapath,
+            in_port,
+            path,
+            dst_ip
+        )
+
+    def install_path(
+        self,
+        path,
+        src_ip,
+        dst_ip
+    ):
+
+        for i, switch_id in enumerate(path):
+
+            datapath = self.datapaths[switch_id]
+
+            parser = datapath.ofproto_parser
+
+            if i == len(path) - 1:
+
+                out_port = self.host_port[dst_ip]
+
+            else:
+
+                next_switch = path[i + 1]
+
+                out_port = self.port_map[
+                    (switch_id, next_switch)
+                ]
+
+            match = parser.OFPMatch(
+                eth_type=0x0800,
+                ipv4_src=src_ip,
+                ipv4_dst=dst_ip
+            )
+
+            actions = [
+                parser.OFPActionOutput(out_port)
+            ]
+
+            self.add_flow(
+                datapath,
+                priority=10,
+                match=match,
+                actions=actions
+            )
+
+    def forward_first_packet(
+        self,
+        msg,
+        datapath,
+        in_port,
+        path,
+        dst_ip
+    ):
+
+        current_switch = datapath.id
+
+        try:
+
+            i = path.index(current_switch)
+
+        except ValueError:
+
+            return
+
+        if i == len(path) - 1:
+
+            out_port = self.host_port[dst_ip]
+
+        else:
+
+            next_switch = path[i + 1]
+
+            out_port = self.port_map[
+                (current_switch, next_switch)
+            ]
+
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        actions = [
+            parser.OFPActionOutput(out_port)
+        ]
+
+        out = parser.OFPPacketOut(
+            datapath=datapath,
+            buffer_id=msg.buffer_id,
+            in_port=in_port,
+            actions=actions,
+            data=msg.data
+            if msg.buffer_id == ofproto.OFP_NO_BUFFER
+            else None
+        )
+
+        datapath.send_msg(out)
+EOF
+9.5 Start Ryu
+Terminal 1
+cd ~/medroute
+ryu-manager --observe-links controller/medroute_controller.py
+
+⚠️ Important: --observe-links is what enables Ryu's link discovery events.
+
+You should see:
+
+MedRoute Controller Started
+Switch connected: s1
+Switch connected: s2
+Switch connected: s3
+Switch connected: s4
+
+Then you should start seeing:
+
+Topology discovery triggered
+
+and eventually things like:
+
+Link discovered: s1:2 -> s2
+Link discovered: s2:1 -> s1
+
+etc.
+
+9.6 Start Mininet
+Terminal 2
+cd ~/medroute
+sudo python3 topology/hospital_topology.py
+
+Wait until:
+
+mininet>
+9.7 Check discovered topology
+
+Wait around 5 seconds, then look at the Ryu terminal.
+
+You should see approximately:
+
+Discovered switches: [1, 2, 3, 4]
+
+and links corresponding to:
+
+s1 ↔ s2
+s1 ↔ s3
+s2 ↔ s4
+s3 ↔ s4
+
+The exact order of the links may differ. That's completely fine.
+
+9.8 Test forwarding
+
+Inside Mininet:
+
+h1 ping -c 5 h2
+
+Expected:
+
+5 packets transmitted, 5 received, 0% packet loss
+
+Then:
+
+h2 ping -c 5 h1
+
+Expected:
+
+5 packets transmitted, 5 received, 0% packet loss
+9.9 Check the route
+
+In Ryu, we want:
+
+Route 10.0.0.1 -> 10.0.0.2 : [1, 2, 4]
+
+and:
+
+Route 10.0.0.2 -> 10.0.0.1 : [4, 2, 1]
+
+The important difference from Step 8 is that the graph and switch-to-switch ports are now discovered rather than manually entered.
+
+✅ STEP 9 CHECKPOINT
+
+Send me:
+
+1. Ryu's switch discovery
+Switch connected: ...
+2. Ryu's topology discovery
+
+Especially:
+
+Discovered switches: ...
+Discovered links: ...
+3. Ryu's route lines
+Route ...
+4. Mininet:
+h1 ping -c 5 h2
+5. Mininet:
+h2 ping -c 5 h1
+
+Don't move to Step 10 yet.
+
+Once Step 9 passes, we'll have a genuinely dynamic topology layer. Then we can start the part that makes the project look like MedRoute, rather than simply a Ryu routing demo: healthcare traffic generation and classification. Your proposal explicitly identifies healthcare traffic generation and traffic classification as core methodology components.
