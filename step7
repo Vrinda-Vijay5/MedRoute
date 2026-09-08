@@ -1,0 +1,522 @@
+YES — now we have the exact location of the failure.
+
+Your latest output proves:
+
+✅ Ryu connects to all 4 switches.
+✅ Topology discovery works.
+✅ NetworkX finds the route [1, 3, 4].
+❌ The packet is not actually being forwarded after the route is found.
+❌ That's why there are no Flow installed: messages for ICMP.
+
+The problem is in our forward_packet() implementation. We are relying on the switch's buffer_id. Let's remove that dependency completely and send the actual packet data every time.
+
+Step 1 — Change ONLY forward_packet()
+
+In Terminal 1, stop Ryu:
+
+Ctrl + C
+
+Open:
+
+nano controller/medroute_controller.py
+
+Find the entire function:
+
+def forward_packet(self, msg, path, dst_ip):
+
+Delete that entire function and replace it with:
+
+def forward_packet(self, msg, path, dst_ip):
+
+    if path is None:
+        return
+
+    datapath = msg.datapath
+    dpid = datapath.id
+    parser = datapath.ofproto_parser
+    ofproto = datapath.ofproto
+
+    if dpid not in path:
+        return
+
+    index = path.index(dpid)
+
+    if index == len(path) - 1:
+        out_port = self.host_port[dst_ip]
+    else:
+        next_switch = path[index + 1]
+
+        if (dpid, next_switch) not in self.port_map:
+            print(
+                "ERROR: No port mapping for",
+                dpid,
+                "->",
+                next_switch
+            )
+            return
+
+        out_port = self.port_map[(dpid, next_switch)]
+
+    print(
+        "Forwarding packet:",
+        "s{}".format(dpid),
+        "-> port",
+        out_port
+    )
+
+    actions = [
+        parser.OFPActionOutput(out_port)
+    ]
+
+    in_port = msg.match["in_port"]
+
+    out = parser.OFPPacketOut(
+        datapath=datapath,
+        buffer_id=ofproto.OFP_NO_BUFFER,
+        in_port=in_port,
+        actions=actions,
+        data=msg.data
+    )
+
+    datapath.send_msg(out)
+
+Save:
+
+Ctrl + O
+Enter
+Ctrl + X
+Step 2 — Clean Mininet
+
+In another terminal:
+
+sudo mn -c
+Step 3 — Start Ryu
+cd /mnt/c/Users/subiw/medroute
+source ryu-env/bin/activate
+ryu-manager --observe-links controller/medroute_controller.py
+
+Wait until you see:
+
+Discovered switches: [1, 2, 3, 4]
+Discovered links: [(1, 2), (1, 3), (2, 4), (3, 4)]
+Step 4 — Start Mininet
+
+In another terminal:
+
+cd /mnt/c/Users/subiw/medroute
+sudo python3 topology/network_monitor.py
+
+This time, look at the Ryu terminal.
+
+You should see:
+
+Route 10.0.0.1 -> 10.0.0.2 : [1, 3, 4]
+Forwarding packet: s1 -> port 3
+Forwarding packet: s3 -> port 2
+Forwarding packet: s4 -> port 1
+
+Then you should get the reverse ARP:
+
+Route 10.0.0.2 -> 10.0.0.1 : [4, 3, 1]
+
+And eventually:
+
+Flow installed: s1 ...
+Flow installed: s3 ...
+Flow installed: s4 ...
+Most important
+
+Your current Ryu output:
+
+Route 10.0.0.1 -> 10.0.0.2 : [1, 3, 4]
+
+means routing calculation is already working.
+
+We're fixing the next stage: actually sending the PacketOut through the selected port.
+
+Don't change anything else. Run these steps exactly.
+
+Today 11:42 PM
+step 11 is done give proper step 12
+
+Absolutely. Since Step 11 (Network Monitoring) is completed, Step 12 should move from basic monitoring into the first real MedRoute intelligence layer: collecting network-state metrics and using them to make routing decisions.
+
+For Review 1, this is also the right progression because your proposal specifically identifies congestion monitoring, traffic classification, Braess detection, and AI/game-theoretic routing as later modules.
+
+STEP 12 — Dynamic Network State & Congestion Monitoring
+Goal
+
+Until Step 11, your controller essentially does:
+
+Topology
+   ↓
+NetworkX shortest path
+   ↓
+Forward packets
+
+Now we make it:
+
+Topology
+   ↓
+Measure network state
+   ↓
+Calculate link utilization / congestion
+   ↓
+Assign dynamic link weights
+   ↓
+NetworkX chooses the better path
+   ↓
+Forward packets
+
+This is very important for your final project, because later the Braess module will use these network-state values to determine whether adding/using another path actually improves or worsens the network.
+
+Step 12.1 — Create the congestion monitor
+
+Go to your project:
+
+cd /mnt/c/Users/subiw/medroute
+
+Open:
+
+nano controller/congestion_monitor.py
+
+Paste:
+
+import time
+
+
+class CongestionMonitor:
+
+    def __init__(self):
+        self.link_stats = {}
+
+    def calculate_congestion(self, bandwidth, used_bandwidth):
+
+        if bandwidth <= 0:
+            return 0
+
+        utilization = used_bandwidth / bandwidth
+
+        if utilization > 1:
+            utilization = 1
+
+        return utilization
+
+    def classify_congestion(self, utilization):
+
+        if utilization < 0.30:
+            return "LOW"
+
+        elif utilization < 0.70:
+            return "MEDIUM"
+
+        else:
+            return "HIGH"
+
+    def update_link(self, src, dst, bandwidth, used_bandwidth):
+
+        utilization = self.calculate_congestion(
+            bandwidth,
+            used_bandwidth
+        )
+
+        level = self.classify_congestion(utilization)
+
+        self.link_stats[(src, dst)] = {
+            "bandwidth": bandwidth,
+            "used_bandwidth": used_bandwidth,
+            "utilization": utilization,
+            "congestion": level,
+            "timestamp": time.time()
+        }
+
+        return self.link_stats[(src, dst)]
+
+    def get_link_status(self, src, dst):
+
+        return self.link_stats.get(
+            (src, dst),
+            None
+        )
+
+
+if __name__ == "__main__":
+
+    monitor = CongestionMonitor()
+
+    tests = [
+        (10, 2),
+        (10, 5),
+        (10, 8)
+    ]
+
+    print("============================")
+    print("MedRoute Congestion Monitor")
+    print("============================")
+
+    for bandwidth, used in tests:
+
+        result = monitor.update_link(
+            1,
+            2,
+            bandwidth,
+            used
+        )
+
+        print(
+            "Link: s1 -> s2 | "
+            "Utilization: {:.0f}% | "
+            "Congestion: {}".format(
+                result["utilization"] * 100,
+                result["congestion"]
+            )
+        )
+
+Save:
+
+Ctrl + O
+Enter
+Ctrl + X
+Step 12.2 — Test it
+
+Run:
+
+python3 controller/congestion_monitor.py
+
+You should get:
+
+============================
+MedRoute Congestion Monitor
+============================
+Link: s1 -> s2 | Utilization: 20% | Congestion: LOW
+Link: s1 -> s2 | Utilization: 50% | Congestion: MEDIUM
+Link: s1 -> s2 | Utilization: 80% | Congestion: HIGH
+
+If you get this, Step 12.2 is PASS.
+
+Step 12.3 — Understand what we just created
+
+The important quantity is:
+
+$$ \text{Utilization} = \frac{\text{Used Bandwidth}} {\text{Available Bandwidth}} $$
+
+For example:
+
+Bandwidth = 10 Mbps
+Used      = 8 Mbps
+
+Therefore:
+
+$$ U = \frac{8}{10}=0.8=80\% $$
+
+So:
+
+80% → HIGH congestion
+
+Our initial thresholds are:
+
+Utilization	State
+< 30%	LOW
+30–70%	MEDIUM
+> 70%	HIGH
+
+These are prototype thresholds, not final research thresholds. Later we'll tune them experimentally.
+
+Step 12.4 — Add dynamic routing weights
+
+This is the important part.
+
+Currently your NetworkX graph uses:
+
+weight=1
+
+for every link.
+
+That means:
+
+s1 ── s2 ── s4
+ \          /
+  s3 ──────
+
+Both paths have equal cost.
+
+So the controller may choose either:
+
+s1 → s2 → s4
+
+or:
+
+s1 → s3 → s4
+
+depending on discovery/order.
+
+Now we'll make the cost depend on congestion.
+
+Create:
+
+nano controller/link_weight.py
+
+Paste:
+
+class LinkWeightCalculator:
+
+    def calculate_weight(self, utilization):
+
+        if utilization < 0.30:
+            return 1
+
+        elif utilization < 0.70:
+            return 5
+
+        else:
+            return 10
+
+
+if __name__ == "__main__":
+
+    calculator = LinkWeightCalculator()
+
+    print("============================")
+    print("MedRoute Link Weight Test")
+    print("============================")
+
+    values = [0.2, 0.5, 0.8]
+
+    for utilization in values:
+
+        weight = calculator.calculate_weight(
+            utilization
+        )
+
+        print(
+            "Utilization: {:.0f}% | Weight: {}".format(
+                utilization * 100,
+                weight
+            )
+        )
+
+Save and run:
+
+python3 controller/link_weight.py
+
+Expected:
+
+============================
+MedRoute Link Weight Test
+============================
+Utilization: 20% | Weight: 1
+Utilization: 50% | Weight: 5
+Utilization: 80% | Weight: 10
+Step 12.5 — Why this matters for MedRoute
+
+Your routing is now conceptually:
+
+                  LOW congestion
+                       ↓
+s1 ───────────────→ s2 ─────→ s4
+ │
+ │
+ └───────────────→ s3 ─────→ s4
+                  ↑
+            HIGH congestion
+
+Suppose:
+
+Path A:
+s1 → s2 → s4
+
+has:
+
+s1-s2 = 20%
+s2-s4 = 30%
+
+and Path B:
+
+s1 → s3 → s4
+
+has:
+
+s1-s3 = 80%
+s3-s4 = 70%
+
+Then:
+
+Path A cost = 1 + 5 = 6
+Path B cost = 10 + 10 = 20
+
+NetworkX will prefer:
+
+s1 → s2 → s4
+
+This is the foundation for your later Braess-aware routing.
+
+Step 12.6 — What NOT to do yet
+
+Don't implement these yet:
+
+❌ Nash equilibrium
+❌ Q-learning
+❌ Braess detection
+❌ AI prediction
+❌ Patient criticality integration
+❌ Final dynamic routing controller
+
+Those are later modules.
+
+For Step 12, we're building the network-state foundation first.
+
+Your complete architecture is gradually becoming:
+
+                 MEDROUTE AI
+
+Healthcare Traffic
+        │
+        ▼
+Traffic Classifier
+        │
+        ▼
+Patient Criticality
+        │
+        ▼
+Network Monitor
+        │
+        ▼
+Congestion Monitor     ← STEP 12
+        │
+        ▼
+Dynamic Link Weights   ← STEP 12
+        │
+        ▼
+Routing Engine
+        │
+        ▼
+Braess Detection
+        │
+        ▼
+Game-Theoretic / AI Routing
+        │
+        ▼
+Ryu Controller
+        │
+        ▼
+OpenFlow Switches
+        │
+        ▼
+Hospital Server
+
+This matches the direction of your proposed architecture, which places traffic collection, criticality scoring, Braess detection, game-theoretic routing and the Ryu controller in sequence.
+
+Your Step 12 checklist
+Task	Status
+Create congestion monitor	⬜
+Test utilization calculation	⬜
+Classify congestion	⬜
+Create dynamic link-weight calculator	⬜
+Test link weights	⬜
+Integrate weights into Ryu	Next
+
+Do only Step 12.1 and Step 12.2 now. Run:
+
+python3 controller/congestion_monitor.py
+
+and send me the output. Then we'll integrate the congestion values into your actual Ryu/NetworkX controller rather than creating disconnected demo code.
