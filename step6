@@ -1,0 +1,207 @@
+Step 11 — Network Monitoring
+
+Now we build the Network Monitoring Module.
+
+The purpose is simple:
+
+While Mininet traffic is running, measure what is happening in the network.
+
+We need this data later for congestion detection, Braess detection, and route optimization.
+
+Step 11 goal
+
+We want to collect:
+
+Latency
+Throughput
+Packet loss
+Link utilization
+Traffic/flow information
+
+For Review 1, we don't need the final AI/Braess logic yet.
+
+Step 11.1 — Create the monitoring file
+
+Go to your project:
+
+cd ~/medroute
+
+Check:
+
+pwd
+
+Then create:
+
+nano controller/network_monitor.py
+
+Paste this:
+
+import time
+import subprocess
+
+class NetworkMonitor:
+
+    def ping_test(self, source, destination):
+        command = ["ping", "-c", "4", destination]
+
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        output = result.stdout
+
+        latency = None
+        packet_loss = None
+
+        for line in output.splitlines():
+            if "packet loss" in line:
+                packet_loss = line.split("%")[0].split()[-1]
+
+            if "min/avg/max" in line:
+                values = line.split("=")[1].split("/")
+                latency = values[1]
+
+        return latency, packet_loss
+
+    def show_result(self, source, destination):
+        latency, packet_loss = self.ping_test(source, destination)
+
+        print("============================")
+        print("MedRoute Network Monitor")
+        print("============================")
+        print("Source:", source)
+        print("Destination:", destination)
+        print("Average Latency:", latency, "ms")
+        print("Packet Loss:", packet_loss, "%")
+        print("============================")
+
+
+if __name__ == "__main__":
+    monitor = NetworkMonitor()
+    monitor.show_result("h1", "10.0.0.2")
+
+Save:
+
+Ctrl + O → Enter → Ctrl + X
+
+BUT don't run this yet.
+
+There is one important issue.
+
+This Python program runs in your WSL terminal, while h1 exists inside Mininet's network namespace.
+
+So we should make the monitor work through Mininet, rather than trying to ping h1 directly from WSL.
+
+For our project, the cleaner approach is to create a Mininet monitoring script that runs the measurements from the hosts.
+
+Step 11.2 — Create the Mininet monitor
+
+Run:
+
+nano topology/network_monitor.py
+
+Paste:
+
+from mininet.net import Mininet
+from mininet.node import OVSKernelSwitch, RemoteController
+from mininet.link import TCLink
+from mininet.log import setLogLevel
+
+def run():
+
+    net = Mininet(
+        switch=OVSKernelSwitch,
+        link=TCLink,
+        controller=None
+    )
+
+    c0 = net.addController(
+        "c0",
+        controller=RemoteController,
+        ip="127.0.0.1",
+        port=6653
+    )
+
+    h1 = net.addHost("h1", ip="10.0.0.1")
+    h2 = net.addHost("h2", ip="10.0.0.2")
+
+    s1 = net.addSwitch("s1")
+    s2 = net.addSwitch("s2")
+    s3 = net.addSwitch("s3")
+    s4 = net.addSwitch("s4")
+
+    net.addLink(h1, s1)
+    net.addLink(s1, s2)
+    net.addLink(s2, s4)
+    net.addLink(s1, s3)
+    net.addLink(s3, s4)
+    net.addLink(s4, h2)
+
+    net.start()
+
+    print("============================")
+    print("MedRoute Network Monitoring")
+    print("============================")
+
+    print("\nPing Test:")
+    print(h1.cmd("ping -c 4 10.0.0.2"))
+
+    print("\nNetwork Interface Statistics:")
+    print(h1.cmd("ifconfig"))
+    print(h2.cmd("ifconfig"))
+
+    net.stop()
+
+if __name__ == "__main__":
+    setLogLevel("info")
+    run()
+
+Save and exit.
+
+Step 11.3 — Start the Ryu controller
+
+Open Terminal 1.
+
+cd ~/medroute
+source ryu-env/bin/activate
+
+Then:
+
+ryu-manager --observe-links controller/medroute_controller.py
+
+You should see something like:
+
+MedRoute Controller Started
+
+Keep this terminal running.
+
+Step 11.4 — Run the monitor
+
+Open Terminal 2.
+
+cd ~/medroute
+sudo python3 topology/network_monitor.py
+
+You should get a ping result similar to:
+
+Ping Test:
+
+PING 10.0.0.2 ...
+64 bytes from 10.0.0.2: ...
+64 bytes from 10.0.0.2: ...
+64 bytes from 10.0.0.2: ...
+64 bytes from 10.0.0.2: ...
+
+--- 10.0.0.2 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss
+
+And interface information.
+
+For now, send me the full output of Step 11.4.
+
+Don't proceed further yet.
+
+Once this works, we'll make Step 11 actually useful by collecting latency + packet loss + interface/flow statistics into a structured dataset, which is what we'll later feed into the congestion/Braess modules.
