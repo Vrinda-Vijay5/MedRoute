@@ -1,0 +1,446 @@
+STEP 10 — Healthcare Traffic Classification
+🎯 Goal
+
+The controller currently knows only:
+
+IP address → route
+
+We now want MedRoute to understand:
+
+Healthcare traffic
+       ↓
+What type of traffic?
+       ↓
+How critical is it?
+       ↓
+Assign priority/criticality
+
+For this step, we'll build the traffic-classification module first. We are not doing AI yet and we're not changing routing yet.
+
+10.1 What we're implementing
+
+We'll define six healthcare traffic classes based on your project proposal:
+
+Traffic	Class	Criticality
+ECG	EMERGENCY	5
+ICU monitoring	CRITICAL	5
+Telemedicine	HIGH	4
+EHR	HIGH	4
+Medical Imaging	MEDIUM	3
+CCTV	LOW	1
+
+The important idea is:
+
+ECG
+ ↓
+criticality = 5
+
+while:
+
+CCTV
+ ↓
+criticality = 1
+
+Later, the routing engine can use this information when deciding which traffic gets the best path.
+
+10.2 Create the healthcare module
+
+Open your project:
+
+cd ~/medroute
+
+Create a new directory:
+
+mkdir -p healthcare
+
+Now create:
+
+nano healthcare/traffic_classifier.py
+
+Put this complete code inside:
+
+class HealthcareTrafficClassifier:
+
+    TRAFFIC_TYPES = {
+        "ECG": {
+            "class": "EMERGENCY",
+            "criticality": 5
+        },
+        "ICU": {
+            "class": "CRITICAL",
+            "criticality": 5
+        },
+        "TELEMEDICINE": {
+            "class": "HIGH",
+            "criticality": 4
+        },
+        "EHR": {
+            "class": "HIGH",
+            "criticality": 4
+        },
+        "IMAGING": {
+            "class": "MEDIUM",
+            "criticality": 3
+        },
+        "CCTV": {
+            "class": "LOW",
+            "criticality": 1
+        }
+    }
+
+    def classify(self, traffic_type):
+
+        traffic_type = traffic_type.upper()
+
+        if traffic_type not in self.TRAFFIC_TYPES:
+            return {
+                "traffic_type": traffic_type,
+                "class": "UNKNOWN",
+                "criticality": 0
+            }
+
+        result = self.TRAFFIC_TYPES[traffic_type]
+
+        return {
+            "traffic_type": traffic_type,
+            "class": result["class"],
+            "criticality": result["criticality"]
+        }
+
+
+if __name__ == "__main__":
+
+    classifier = HealthcareTrafficClassifier()
+
+    traffic_samples = [
+        "ECG",
+        "ICU",
+        "TELEMEDICINE",
+        "EHR",
+        "IMAGING",
+        "CCTV"
+    ]
+
+    print("============================")
+    print("MedRoute Healthcare Traffic")
+    print("Classification Test")
+    print("============================")
+
+    for traffic in traffic_samples:
+
+        result = classifier.classify(traffic)
+
+        print(
+            "Traffic: {} | Class: {} | Criticality: {}".format(
+                result["traffic_type"],
+                result["class"],
+                result["criticality"]
+            )
+        )
+
+Save:
+
+Ctrl+O
+Enter
+Ctrl+X
+10.3 Test the classifier
+
+Run:
+
+python3 healthcare/traffic_classifier.py
+
+You should get:
+
+============================
+MedRoute Healthcare Traffic
+Classification Test
+============================
+Traffic: ECG | Class: EMERGENCY | Criticality: 5
+Traffic: ICU | Class: CRITICAL | Criticality: 5
+Traffic: TELEMEDICINE | Class: HIGH | Criticality: 4
+Traffic: EHR | Class: HIGH | Criticality: 4
+Traffic: IMAGING | Class: MEDIUM | Criticality: 3
+Traffic: CCTV | Class: LOW | Criticality: 1
+
+If you get this, the classification module itself works.
+
+10.4 Add a simple healthcare traffic generator
+
+Now we need actual traffic that we can classify later.
+
+Create:
+
+nano healthcare/traffic_generator.py
+
+Put this:
+
+import time
+import random
+
+
+class HealthcareTrafficGenerator:
+
+    TRAFFIC_TYPES = [
+        "ECG",
+        "ICU",
+        "TELEMEDICINE",
+        "EHR",
+        "IMAGING",
+        "CCTV"
+    ]
+
+    def generate(self, count=10):
+
+        traffic = []
+
+        for i in range(count):
+
+            traffic_type = random.choice(
+                self.TRAFFIC_TYPES
+            )
+
+            packet = {
+                "id": i + 1,
+                "type": traffic_type,
+                "timestamp": time.time()
+            }
+
+            traffic.append(packet)
+
+        return traffic
+
+
+if __name__ == "__main__":
+
+    generator = HealthcareTrafficGenerator()
+
+    traffic = generator.generate(10)
+
+    print("============================")
+    print("MedRoute Healthcare Traffic")
+    print("Generator Test")
+    print("============================")
+
+    for packet in traffic:
+
+        print(
+            "Packet ID: {} | Type: {}".format(
+                packet["id"],
+                packet["type"]
+            )
+        )
+
+Save:
+
+Ctrl+O
+Enter
+Ctrl+X
+10.5 Test the traffic generator
+
+Run:
+
+python3 healthcare/traffic_generator.py
+
+You should see something similar to:
+
+============================
+MedRoute Healthcare Traffic
+Generator Test
+============================
+Packet ID: 1 | Type: ECG
+Packet ID: 2 | Type: CCTV
+Packet ID: 3 | Type: ICU
+Packet ID: 4 | Type: EHR
+...
+
+The exact order will be different because we're using random traffic.
+
+10.6 Combine generator + classifier
+
+Now we'll create the first actual MedRoute healthcare pipeline.
+
+Create:
+
+nano healthcare/healthcare_pipeline.py
+
+Use:
+
+from traffic_generator import HealthcareTrafficGenerator
+from traffic_classifier import HealthcareTrafficClassifier
+
+
+class HealthcarePipeline:
+
+    def __init__(self):
+
+        self.generator = HealthcareTrafficGenerator()
+        self.classifier = HealthcareTrafficClassifier()
+
+    def process(self, count=10):
+
+        traffic = self.generator.generate(count)
+
+        results = []
+
+        for packet in traffic:
+
+            classification = self.classifier.classify(
+                packet["type"]
+            )
+
+            packet.update(classification)
+
+            results.append(packet)
+
+        return results
+
+
+if __name__ == "__main__":
+
+    pipeline = HealthcarePipeline()
+
+    results = pipeline.process(10)
+
+    print("============================")
+    print("MedRoute Healthcare Pipeline")
+    print("============================")
+
+    for packet in results:
+
+        print(
+            "ID: {} | Type: {} | Class: {} | Criticality: {}".format(
+                packet["id"],
+                packet["traffic_type"],
+                packet["class"],
+                packet["criticality"]
+            )
+        )
+
+Save:
+
+Ctrl+O
+Enter
+Ctrl+X
+10.7 Run the complete pipeline
+
+From:
+
+cd ~/medroute
+
+run:
+
+python3 healthcare/healthcare_pipeline.py
+
+You should see something like:
+
+============================
+MedRoute Healthcare Pipeline
+============================
+ID: 1 | Type: ECG | Class: EMERGENCY | Criticality: 5
+ID: 2 | Type: CCTV | Class: LOW | Criticality: 1
+ID: 3 | Type: ICU | Class: CRITICAL | Criticality: 5
+ID: 4 | Type: EHR | Class: HIGH | Criticality: 4
+ID: 5 | Type: IMAGING | Class: MEDIUM | Criticality: 3
+...
+
+Again, the order is random.
+
+10.8 Verify everything
+
+Run these three commands:
+
+python3 healthcare/traffic_classifier.py
+python3 healthcare/traffic_generator.py
+python3 healthcare/healthcare_pipeline.py
+
+All three should run without errors.
+
+🧠 What we have actually built
+
+Our architecture now starts looking like:
+
+Healthcare Traffic
+        │
+        ▼
+Traffic Generator
+        │
+        ▼
+Traffic Classifier
+        │
+        ▼
+┌─────────────────────────┐
+│ Traffic Type            │
+│ ECG / ICU / EHR / etc.  │
+└────────────┬────────────┘
+             │
+             ▼
+     Criticality Score
+             │
+             ▼
+       Routing Engine
+
+The routing engine isn't using the score yet.
+
+That's intentional.
+
+We're building the system in layers so that later we can measure exactly what each addition contributes.
+
+⚠️ Important: this is not the final classifier
+
+For the research/patent version, eventually we should not simply say:
+
+if ECG → 5
+
+We can later make the criticality score depend on multiple features such as:
+
+Patient criticality
++
+Traffic type
++
+Emergency status
++
+Latency requirement
++
+Packet loss sensitivity
++
+Current network congestion
+
+For example:
+
+Criticality Score
+=
+w1(Patient Severity)
++
+w2(Traffic Type)
++
+w3(Emergency Status)
++
+w4(Latency Sensitivity)
+
+That will be much stronger academically.
+
+But Step 10 establishes the baseline healthcare classification layer first.
+
+✅ Step 10 completion criteria
+
+We consider Step 10 complete when:
+
+ healthcare/traffic_classifier.py runs
+ Six healthcare traffic types are classified
+ Criticality values are assigned
+ traffic_generator.py produces healthcare traffic
+ healthcare_pipeline.py combines generation + classification
+ No Python errors
+
+Once these pass, don't modify anything else.
+
+The next major step will be Step 11 — Network Monitoring, where MedRoute starts measuring:
+
+packet count
+throughput
+link utilization
+delay
+packet loss
+congestion
+
+Those measurements are extremely important because later our Braess-aware routing needs actual network-state information, rather than simply choosing a shortest path.
