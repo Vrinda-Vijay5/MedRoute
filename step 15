@@ -1,0 +1,528 @@
+Great. Assuming Step 14 produced the latency block correctly, we move on.
+
+Step 15 — Packet Loss Measurement
+
+For Step 15, we will not modify the Ryu controller. Your controller from Step 13 remains untouched.
+
+Step 14 already extracted packet loss from ping, but Step 15 makes packet loss a proper measurable network condition: we'll intentionally configure loss on one path and verify it from transmitted/received packets.
+
+This matters because packet loss will later become one term in our SDN cost:
+
+$$ C = w_DD + w_JJ + w_LL + w_UU $$
+
+where \(L\) is packet loss.
+
+15.1 Back up Step 14
+cd /mnt/c/Users/subiw/medroute
+
+cp topology/network_monitor.py \
+topology/network_monitor_step14_backup.py
+15.2 Replace network_monitor.py
+
+Because we're making several changes, use the full file.
+
+nano topology/network_monitor.py
+
+Delete everything and paste:
+
+from mininet.net import Mininet
+from mininet.node import OVSKernelSwitch, RemoteController
+from mininet.link import TCLink
+from mininet.log import setLogLevel
+
+import time
+import re
+
+
+# ============================================================
+# PING RESULT PARSER
+# ============================================================
+
+def extract_ping_metrics(output):
+
+    metrics = {
+        "packets_transmitted": None,
+        "packets_received": None,
+        "packet_loss": None,
+        "min_latency": None,
+        "avg_latency": None,
+        "max_latency": None,
+        "individual_rtts": []
+    }
+
+    # --------------------------------------------------------
+    # Extract transmitted / received packets
+    # --------------------------------------------------------
+
+    packet_match = re.search(
+        r"(\d+) packets transmitted, "
+        r"(\d+) received",
+        output
+    )
+
+    if packet_match:
+
+        metrics["packets_transmitted"] = int(
+            packet_match.group(1)
+        )
+
+        metrics["packets_received"] = int(
+            packet_match.group(2)
+        )
+
+    # --------------------------------------------------------
+    # Extract packet loss percentage
+    # --------------------------------------------------------
+
+    loss_match = re.search(
+        r"(\d+(?:\.\d+)?)% packet loss",
+        output
+    )
+
+    if loss_match:
+
+        metrics["packet_loss"] = float(
+            loss_match.group(1)
+        )
+
+    # --------------------------------------------------------
+    # Extract min / avg / max RTT
+    # --------------------------------------------------------
+
+    latency_match = re.search(
+        r"=\s*([\d.]+)/([\d.]+)/([\d.]+)/",
+        output
+    )
+
+    if latency_match:
+
+        metrics["min_latency"] = float(
+            latency_match.group(1)
+        )
+
+        metrics["avg_latency"] = float(
+            latency_match.group(2)
+        )
+
+        metrics["max_latency"] = float(
+            latency_match.group(3)
+        )
+
+    # --------------------------------------------------------
+    # Extract individual RTT values
+    # --------------------------------------------------------
+
+    rtts = re.findall(
+        r"time[=<]([\d.]+)\s*ms",
+        output
+    )
+
+    metrics["individual_rtts"] = [
+        float(value)
+        for value in rtts
+    ]
+
+    return metrics
+
+
+# ============================================================
+# DISPLAY RESULTS
+# ============================================================
+
+def display_metrics(metrics):
+
+    print("\n==========================================")
+    print("MedRoute SDN QoS Measurements")
+    print("==========================================")
+
+    print(
+        "Packets Transmitted :",
+        metrics["packets_transmitted"]
+    )
+
+    print(
+        "Packets Received    :",
+        metrics["packets_received"]
+    )
+
+    print(
+        "Packet Loss         :",
+        metrics["packet_loss"],
+        "%"
+    )
+
+    if metrics["min_latency"] is not None:
+
+        print(
+            "Minimum RTT         :",
+            metrics["min_latency"],
+            "ms"
+        )
+
+    if metrics["avg_latency"] is not None:
+
+        print(
+            "Average RTT         :",
+            metrics["avg_latency"],
+            "ms"
+        )
+
+    if metrics["max_latency"] is not None:
+
+        print(
+            "Maximum RTT         :",
+            metrics["max_latency"],
+            "ms"
+        )
+
+    print(
+        "Individual RTTs     :",
+        metrics["individual_rtts"]
+    )
+
+    print("==========================================")
+
+
+# ============================================================
+# MININET
+# ============================================================
+
+def run():
+
+    net = Mininet(
+        switch=OVSKernelSwitch,
+        link=TCLink,
+        controller=None
+    )
+
+    # --------------------------------------------------------
+    # RYU CONTROLLER
+    # --------------------------------------------------------
+
+    net.addController(
+        "c0",
+        controller=RemoteController,
+        ip="127.0.0.1",
+        port=6653
+    )
+
+    # --------------------------------------------------------
+    # HOSTS
+    # --------------------------------------------------------
+
+    h1 = net.addHost(
+        "h1",
+        ip="10.0.0.1/8"
+    )
+
+    h2 = net.addHost(
+        "h2",
+        ip="10.0.0.2/8"
+    )
+
+    # --------------------------------------------------------
+    # SWITCHES
+    # --------------------------------------------------------
+
+    s1 = net.addSwitch(
+        "s1",
+        protocols="OpenFlow13"
+    )
+
+    s2 = net.addSwitch(
+        "s2",
+        protocols="OpenFlow13"
+    )
+
+    s3 = net.addSwitch(
+        "s3",
+        protocols="OpenFlow13"
+    )
+
+    s4 = net.addSwitch(
+        "s4",
+        protocols="OpenFlow13"
+    )
+
+    # --------------------------------------------------------
+    # HOST LINKS
+    #
+    # Keep these first so:
+    # h1 = s1 port 1
+    # h2 = s4 port 1
+    # --------------------------------------------------------
+
+    net.addLink(
+        h1,
+        s1
+    )
+
+    net.addLink(
+        h2,
+        s4
+    )
+
+    # ========================================================
+    # PATH 1
+    #
+    # s1 -> s2 -> s4
+    #
+    # Lower delay
+    # But introduce controlled packet loss.
+    # ========================================================
+
+    net.addLink(
+        s1,
+        s2,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    net.addLink(
+        s2,
+        s4,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    # ========================================================
+    # PATH 2
+    #
+    # s1 -> s3 -> s4
+    #
+    # Higher delay
+    # No configured packet loss.
+    # ========================================================
+
+    net.addLink(
+        s1,
+        s3,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    net.addLink(
+        s3,
+        s4,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    # --------------------------------------------------------
+    # START NETWORK
+    # --------------------------------------------------------
+
+    net.start()
+
+    print("\nWaiting for SDN topology discovery...")
+
+    time.sleep(5)
+
+    # --------------------------------------------------------
+    # PACKET LOSS TEST
+    # --------------------------------------------------------
+
+    print("\n==========================================")
+    print("MedRoute Step 15")
+    print("SDN Packet Loss Measurement")
+    print("==========================================")
+
+    print(
+        "\nSending 50 ICMP packets "
+        "from h1 to h2...\n"
+    )
+
+    ping_output = h1.cmd(
+        "ping -c 50 -i 0.1 10.0.0.2"
+    )
+
+    print(ping_output)
+
+    # --------------------------------------------------------
+    # PARSE MEASUREMENTS
+    # --------------------------------------------------------
+
+    metrics = extract_ping_metrics(
+        ping_output
+    )
+
+    display_metrics(
+        metrics
+    )
+
+    # --------------------------------------------------------
+    # KEEP MININET ALIVE
+    # --------------------------------------------------------
+
+    input(
+        "\nPress ENTER to stop Mininet..."
+    )
+
+    net.stop()
+
+
+if __name__ == "__main__":
+
+    setLogLevel("info")
+
+    run()
+
+Save with:
+
+Ctrl + O
+Enter
+Ctrl + X
+15.3 Check syntax
+python3 -m py_compile topology/network_monitor.py
+
+No output = good.
+
+If there's an error, don't continue.
+
+15.4 Clean Mininet
+sudo mn -c
+15.5 Terminal 1 — Start Ryu
+
+Use exactly our existing controller:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+
+ryu-manager --observe-links controller/medroute_controller.py
+
+Leave it running.
+
+15.6 Terminal 2 — Run Step 15
+cd /mnt/c/Users/subiw/medroute
+
+sudo python3 topology/network_monitor.py
+
+The test now sends:
+
+$$ 50\ packets $$
+
+rather than just 10.
+
+That's intentional. Packet loss is probabilistic, so testing with more packets gives us a more useful sample than sending only a few packets.
+
+15.7 Expected result
+
+You might see something like:
+
+50 packets transmitted, 44 received, 12% packet loss
+
+followed by:
+
+==========================================
+MedRoute SDN QoS Measurements
+==========================================
+Packets Transmitted : 50
+Packets Received    : 44
+Packet Loss         : 12.0 %
+Minimum RTT         : 20.5 ms
+Average RTT         : 21.2 ms
+Maximum RTT         : 24.1 ms
+Individual RTTs     : [...]
+==========================================
+
+Do not expect exactly 10% loss.
+
+We configured:
+
+s1 -- 5% loss -- s2 -- 5% loss -- s4
+
+and ping traffic also has a return journey. Loss events are probabilistic, so the observed end-to-end ping loss can differ considerably from either individual link's configured 5%.
+
+That's actually useful: we're measuring the resulting network behavior rather than just copying the configured loss= value.
+
+One important thing to check
+
+Your controller may currently choose:
+
+Route 10.0.0.1 -> 10.0.0.2 : [1, 3, 4]
+
+instead of:
+
+[1, 2, 4]
+
+because both paths currently have the same graph weight:
+
+$$ 1+1=2 $$
+
+If it chooses [1,3,4], you may get:
+
+Packet Loss : 0.0 %
+
+because that path has loss=0.
+
+That is not a Step 15 failure.
+
+In fact, this exposes exactly the limitation we're about to solve:
+
+CURRENT ROUTING
+
+           weight 1
+       s2 ───────── s4
+      /              |
+     /               |
+   s1                h2
+     \
+      \
+       s3 ───────── s4
+           weight 1
+
+Controller only sees:
+path cost = 2
+path cost = 2
+
+But the real network actually has:
+
+Path 1
+s1 → s2 → s4
+Low delay
+Higher loss
+
+Path 2
+s1 → s3 → s4
+Higher delay
+Lower loss
+
+The controller doesn't understand those QoS differences yet.
+
+That's the entire reason we're building the cost engine.
+
+Where we are now
+
+After this step, our measurement foundation is:
+
+Metric	Status
+OpenFlow packets/bytes	✅
+Traffic rate	✅
+RTT/latency	✅
+Packet loss	🔄 Step 15
+Jitter	Next
+Utilization	Upcoming
+Normalization	Upcoming
+Multi-metric SDN cost	Upcoming
+Dynamic cost-based routing	Upcoming
+AI/ML	❌ Removed
+
+The final goal is not simply:
+
+$$ ShortestPath = minimum\ hops $$
+
+It becomes:
+
+$$ \boxed{ BestPath=\arg\min_P\sum_{e\in P} Cost(e) } $$
+
+with something like:
+
+$$ \boxed{ Cost(e)= w_DD_e+ w_JJ_e+ w_LL_e+ w_UU_e } $$
+
+So a two-hop path with terrible loss may eventually be rejected in favor of another two-hop path with better healthcare-network QoS.
+
+Run Step 15. Send me just the MedRoute SDN QoS Measurements block and the Ryu line showing Route 10.0.0.1 -> 10.0.0.2. Then I can tell whether the measured loss corresponds to the path the SDN controller actually selected.
