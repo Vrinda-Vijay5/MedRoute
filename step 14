@@ -1,0 +1,497 @@
+Step 13 is locked as complete. ✅
+
+Step 14 — Measure Real Network Latency/Delay
+
+This step measures actual end-to-end latency inside our Mininet SDN network. We will not modify the working Ryu controller in this step, which keeps Step 13 safe.
+
+We will upgrade topology/network_monitor.py so it measures:
+
+average latency
+minimum latency
+maximum latency
+packet loss
+individual ping RTT values
+
+Packet loss will be formally used in the next cost stages, but since ping already provides it, we might as well collect it correctly now.
+
+14.1 — Back up the working monitor
+
+Run:
+
+cd /mnt/c/Users/subiw/medroute
+
+cp topology/network_monitor.py \
+topology/network_monitor_step13_backup.py
+
+Then:
+
+ls topology/
+
+Make sure you have:
+
+network_monitor.py
+network_monitor_step13_backup.py
+14.2 — Replace network_monitor.py
+
+Open:
+
+nano topology/network_monitor.py
+
+Delete everything and paste this full code:
+
+from mininet.net import Mininet
+from mininet.node import OVSKernelSwitch, RemoteController
+from mininet.link import TCLink
+from mininet.log import setLogLevel
+
+import time
+import re
+
+
+def extract_ping_metrics(output):
+
+    metrics = {
+        "packet_loss": None,
+        "min_latency": None,
+        "avg_latency": None,
+        "max_latency": None,
+        "individual_rtts": []
+    }
+
+    # ------------------------------------------
+    # Extract packet loss
+    # ------------------------------------------
+
+    loss_match = re.search(
+        r"(\d+(?:\.\d+)?)% packet loss",
+        output
+    )
+
+    if loss_match:
+
+        metrics["packet_loss"] = float(
+            loss_match.group(1)
+        )
+
+    # ------------------------------------------
+    # Extract min / avg / max latency
+    # ------------------------------------------
+
+    latency_match = re.search(
+        r"=\s*([\d.]+)/([\d.]+)/([\d.]+)/",
+        output
+    )
+
+    if latency_match:
+
+        metrics["min_latency"] = float(
+            latency_match.group(1)
+        )
+
+        metrics["avg_latency"] = float(
+            latency_match.group(2)
+        )
+
+        metrics["max_latency"] = float(
+            latency_match.group(3)
+        )
+
+    # ------------------------------------------
+    # Extract individual RTT values
+    # ------------------------------------------
+
+    rtts = re.findall(
+        r"time[=<]([\d.]+)\s*ms",
+        output
+    )
+
+    metrics["individual_rtts"] = [
+        float(value)
+        for value in rtts
+    ]
+
+    return metrics
+
+
+def display_metrics(metrics):
+
+    print("\n================================")
+    print("MedRoute SDN QoS Measurements")
+    print("================================")
+
+    if metrics["packet_loss"] is not None:
+
+        print(
+            "Packet Loss      :",
+            metrics["packet_loss"],
+            "%"
+        )
+
+    if metrics["min_latency"] is not None:
+
+        print(
+            "Minimum Latency  :",
+            metrics["min_latency"],
+            "ms"
+        )
+
+    if metrics["avg_latency"] is not None:
+
+        print(
+            "Average Latency  :",
+            metrics["avg_latency"],
+            "ms"
+        )
+
+    if metrics["max_latency"] is not None:
+
+        print(
+            "Maximum Latency  :",
+            metrics["max_latency"],
+            "ms"
+        )
+
+    print(
+        "Individual RTTs   :",
+        metrics["individual_rtts"]
+    )
+
+    print("================================")
+
+
+def run():
+
+    # ==========================================
+    # CREATE MININET
+    # ==========================================
+
+    net = Mininet(
+        switch=OVSKernelSwitch,
+        link=TCLink,
+        controller=None
+    )
+
+    # ==========================================
+    # REMOTE RYU CONTROLLER
+    # ==========================================
+
+    net.addController(
+        "c0",
+        controller=RemoteController,
+        ip="127.0.0.1",
+        port=6653
+    )
+
+    # ==========================================
+    # HOSTS
+    # ==========================================
+
+    h1 = net.addHost(
+        "h1",
+        ip="10.0.0.1/8"
+    )
+
+    h2 = net.addHost(
+        "h2",
+        ip="10.0.0.2/8"
+    )
+
+    # ==========================================
+    # SWITCHES
+    # ==========================================
+
+    s1 = net.addSwitch(
+        "s1",
+        protocols="OpenFlow13"
+    )
+
+    s2 = net.addSwitch(
+        "s2",
+        protocols="OpenFlow13"
+    )
+
+    s3 = net.addSwitch(
+        "s3",
+        protocols="OpenFlow13"
+    )
+
+    s4 = net.addSwitch(
+        "s4",
+        protocols="OpenFlow13"
+    )
+
+    # ==========================================
+    # HOST LINKS
+    #
+    # Keep these FIRST.
+    # This guarantees:
+    #
+    # h1 -> s1 port 1
+    # h2 -> s4 port 1
+    #
+    # Our Ryu controller currently expects this.
+    # ==========================================
+
+    net.addLink(
+        h1,
+        s1
+    )
+
+    net.addLink(
+        h2,
+        s4
+    )
+
+    # ==========================================
+    # INTER-SWITCH LINKS
+    #
+    # Delay is intentionally added so that
+    # network latency is measurable.
+    # ==========================================
+
+    net.addLink(
+        s1,
+        s2,
+        bw=10,
+        delay="5ms"
+    )
+
+    net.addLink(
+        s2,
+        s4,
+        bw=10,
+        delay="5ms"
+    )
+
+    net.addLink(
+        s1,
+        s3,
+        bw=10,
+        delay="10ms"
+    )
+
+    net.addLink(
+        s3,
+        s4,
+        bw=10,
+        delay="10ms"
+    )
+
+    # ==========================================
+    # START NETWORK
+    # ==========================================
+
+    net.start()
+
+    print("\nWaiting for SDN topology discovery...")
+
+    time.sleep(5)
+
+    # ==========================================
+    # LATENCY TEST
+    # ==========================================
+
+    print("\n================================")
+    print("MedRoute Step 14")
+    print("SDN Latency Measurement")
+    print("================================")
+
+    print(
+        "\nSending 10 ICMP packets "
+        "from h1 to h2...\n"
+    )
+
+    ping_output = h1.cmd(
+        "ping -c 10 -i 0.2 10.0.0.2"
+    )
+
+    print(ping_output)
+
+    # ==========================================
+    # PARSE RESULTS
+    # ==========================================
+
+    metrics = extract_ping_metrics(
+        ping_output
+    )
+
+    display_metrics(
+        metrics
+    )
+
+    # ==========================================
+    # KEEP NETWORK ALIVE
+    # ==========================================
+
+    input(
+        "\nPress ENTER to stop Mininet..."
+    )
+
+    net.stop()
+
+
+if __name__ == "__main__":
+
+    setLogLevel("info")
+
+    run()
+
+Save:
+
+Ctrl + O
+Enter
+Ctrl + X
+14.3 — Check the Python code
+
+Run:
+
+python3 -m py_compile topology/network_monitor.py
+
+Correct result:
+
+(no output)
+
+If there's an error, stop and send it to me.
+
+14.4 — Clean old Mininet state
+sudo mn -c
+14.5 — Terminal 1: Start our Step 13 Ryu controller
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+
+ryu-manager --observe-links controller/medroute_controller.py
+
+Don't change the controller.
+
+14.6 — Terminal 2: Run Step 14
+cd /mnt/c/Users/subiw/medroute
+
+sudo python3 topology/network_monitor.py
+
+Wait for the test to finish.
+
+What should happen?
+
+Because we've deliberately configured the links differently:
+
+             5 ms          5 ms
+       ┌──── s2 ───────────┐
+       │                   │
+h1 ── s1                   s4 ── h2
+       │                   │
+       └──── s3 ───────────┘
+            10 ms         10 ms
+
+Path:
+
+s1 → s2 → s4
+
+has approximately:
+
+$$ 5+5=10ms $$
+
+one-way configured link delay.
+
+Path:
+
+s1 → s3 → s4
+
+has approximately:
+
+$$ 10+10=20ms $$
+
+one-way configured link delay.
+
+Ping measures round-trip time (RTT), not one-way delay, so don't expect the displayed average to be exactly 10 ms.
+
+You may see something roughly like:
+
+================================
+MedRoute SDN QoS Measurements
+================================
+Packet Loss      : 0.0 %
+Minimum Latency  : 20.xxx ms
+Average Latency  : 21.xxx ms
+Maximum Latency  : 23.xxx ms
+Individual RTTs  : [...]
+================================
+
+Exact values will differ.
+
+Why did we deliberately add delay?
+
+Because previously our Mininet links were essentially:
+
+delay ≈ 0
+
+That makes demonstrating intelligent routing based on latency difficult.
+
+Now we have two genuinely different network conditions:
+
+LOW-DELAY PATH
+
+s1 → s2 → s4
+5ms + 5ms
+
+versus:
+
+HIGH-DELAY PATH
+
+s1 → s3 → s4
+10ms + 10ms
+
+Later, our SDN controller should understand:
+
+These paths have the same number of hops, but they do not have the same network cost.
+
+That's exactly why we're moving beyond ordinary shortest-path routing.
+
+Important distinction for your review
+
+If your teacher asks:
+
+“Are delay and latency the same?”
+
+You can say:
+
+Delay refers to the time required for a packet to travel through the network. In our experiment, Mininet's TCLink introduces controlled link delays. Latency/RTT is measured using ICMP ping from the source to the destination and represents the round-trip communication time.
+
+And if they ask:
+
+“Is this AI?”
+
+No.
+
+The pipeline is:
+
+Mininet TCLink
+      ↓
+Real packet transmission
+      ↓
+ICMP measurement
+      ↓
+Latency
+      ↓
+SDN cost calculation
+      ↓
+Ryu routing decision
+      ↓
+OpenFlow rules
+
+Entirely SDN/network measurement based.
+
+After Step 14
+
+We'll have:
+
+Metric	Status
+Packets/bytes	✅ Step 13
+Traffic rate	✅ Step 13
+Latency/RTT	🔄 Step 14
+Packet loss	🟡 Already collected; formal integration later
+Jitter	⏭️ Next
+Utilization	⏭️ derived from traffic rate/capacity
+Final SDN cost	⏭️
+AI	❌ Removed
+
+Run Step 14 and send me the final MedRoute SDN QoS Measurements block. That's enough for me to verify it; you don't need to paste the hundreds of Ryu PORT STATS/LLDP lines.
