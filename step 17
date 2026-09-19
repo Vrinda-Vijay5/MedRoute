@@ -1,0 +1,604 @@
+Absolutely. Step 17 is the point where the cost-calculation part properly begins.
+
+We already have the four ingredients:
+
+$$ \text{Delay},\quad \text{Jitter},\quad \text{Packet Loss},\quad \text{Utilization} $$
+
+Now we'll create a separate SDN QoS Cost Engine. We will not touch your working Ryu controller yet. First we verify that the mathematics works correctly; Step 18 will connect it to routing.
+
+Step 17 — QoS Normalization + Multi-Metric Cost Calculation
+
+The problem is that our measurements use different units:
+
+Delay       = 22.7 ms
+Jitter      = 2.2 ms
+Packet Loss = 18 %
+Traffic     = 4 Mbps
+Capacity    = 10 Mbps
+
+We cannot meaningfully do:
+
+$$ 22.7+2.2+18+4 $$
+
+Instead, we normalize everything to the range:
+
+$$ 0\leq X_N\leq1 $$
+
+Then calculate:
+
+$$ \boxed{C=w_DD_N+w_JJ_N+w_LL_N+w_UU_N} $$
+
+For now we'll use configurable experimental weights:
+
+Delay       0.30
+Jitter      0.20
+Packet Loss 0.30
+Utilization 0.20
+             ----
+             1.00
+
+These are engineering weights for our prototype, not medically validated values. Later, Step 19/20 can vary them by healthcare traffic criticality.
+
+17.1 Create a new cost engine
+
+We don't modify the controller.
+
+Run:
+
+cd /mnt/c/Users/subiw/medroute
+
+nano controller/qos_cost.py
+
+Paste this entire file:
+
+class QoSCostCalculator:
+
+    def __init__(self):
+
+        # ====================================================
+        # NORMALIZATION LIMITS
+        # ====================================================
+
+        # Experimental upper bounds used by the prototype.
+        # Values above these limits are capped at 1.0.
+
+        self.max_delay_ms = 100.0
+        self.max_jitter_ms = 50.0
+        self.max_packet_loss_percent = 100.0
+
+        # ====================================================
+        # QoS COST WEIGHTS
+        # ====================================================
+
+        self.weight_delay = 0.30
+        self.weight_jitter = 0.20
+        self.weight_loss = 0.30
+        self.weight_utilization = 0.20
+
+
+    # ========================================================
+    # GENERIC NORMALIZATION
+    # ========================================================
+
+    def normalize(self, value, maximum):
+
+        if value is None:
+            return 0.0
+
+        if maximum <= 0:
+            return 0.0
+
+        normalized = value / maximum
+
+        # Keep value between 0 and 1
+        normalized = max(
+            0.0,
+            min(normalized, 1.0)
+        )
+
+        return normalized
+
+
+    # ========================================================
+    # UTILIZATION
+    # ========================================================
+
+    def calculate_utilization(
+        self,
+        traffic_rate_mbps,
+        link_capacity_mbps
+    ):
+
+        if link_capacity_mbps <= 0:
+            return 1.0
+
+        utilization = (
+            traffic_rate_mbps /
+            link_capacity_mbps
+        )
+
+        utilization = max(
+            0.0,
+            min(utilization, 1.0)
+        )
+
+        return utilization
+
+
+    # ========================================================
+    # CALCULATE COMPLETE QoS COST
+    # ========================================================
+
+    def calculate_cost(
+        self,
+        delay_ms,
+        jitter_ms,
+        packet_loss_percent,
+        traffic_rate_mbps,
+        link_capacity_mbps
+    ):
+
+        # ----------------------------------------------------
+        # NORMALIZE DELAY
+        # ----------------------------------------------------
+
+        delay_normalized = self.normalize(
+            delay_ms,
+            self.max_delay_ms
+        )
+
+        # ----------------------------------------------------
+        # NORMALIZE JITTER
+        # ----------------------------------------------------
+
+        jitter_normalized = self.normalize(
+            jitter_ms,
+            self.max_jitter_ms
+        )
+
+        # ----------------------------------------------------
+        # NORMALIZE PACKET LOSS
+        # ----------------------------------------------------
+
+        loss_normalized = self.normalize(
+            packet_loss_percent,
+            self.max_packet_loss_percent
+        )
+
+        # ----------------------------------------------------
+        # CALCULATE UTILIZATION
+        # ----------------------------------------------------
+
+        utilization = self.calculate_utilization(
+            traffic_rate_mbps,
+            link_capacity_mbps
+        )
+
+        # ----------------------------------------------------
+        # WEIGHTED COST
+        # ----------------------------------------------------
+
+        delay_cost = (
+            self.weight_delay *
+            delay_normalized
+        )
+
+        jitter_cost = (
+            self.weight_jitter *
+            jitter_normalized
+        )
+
+        loss_cost = (
+            self.weight_loss *
+            loss_normalized
+        )
+
+        utilization_cost = (
+            self.weight_utilization *
+            utilization
+        )
+
+        total_cost = (
+            delay_cost +
+            jitter_cost +
+            loss_cost +
+            utilization_cost
+        )
+
+        # ----------------------------------------------------
+        # RETURN ALL VALUES
+        # ----------------------------------------------------
+
+        return {
+            "delay_normalized":
+                delay_normalized,
+
+            "jitter_normalized":
+                jitter_normalized,
+
+            "loss_normalized":
+                loss_normalized,
+
+            "utilization":
+                utilization,
+
+            "delay_cost":
+                delay_cost,
+
+            "jitter_cost":
+                jitter_cost,
+
+            "loss_cost":
+                loss_cost,
+
+            "utilization_cost":
+                utilization_cost,
+
+            "total_cost":
+                total_cost
+        }
+
+
+# ============================================================
+# TEST
+# ============================================================
+
+if __name__ == "__main__":
+
+    calculator = QoSCostCalculator()
+
+    print("\n==========================================")
+    print("MedRoute Step 17")
+    print("SDN Multi-Metric QoS Cost Calculation")
+    print("==========================================")
+
+    # Values similar to our measured network results
+    delay = 22.742
+    jitter = 2.232
+    packet_loss = 18.0
+
+    # Test traffic condition
+    traffic_rate = 4.0
+
+    # Mininet links are configured at 10 Mbps
+    link_capacity = 10.0
+
+    result = calculator.calculate_cost(
+        delay_ms=delay,
+        jitter_ms=jitter,
+        packet_loss_percent=packet_loss,
+        traffic_rate_mbps=traffic_rate,
+        link_capacity_mbps=link_capacity
+    )
+
+    print("\nRAW NETWORK METRICS")
+    print("------------------------------------------")
+
+    print(
+        "Delay            :",
+        delay,
+        "ms"
+    )
+
+    print(
+        "Jitter           :",
+        jitter,
+        "ms"
+    )
+
+    print(
+        "Packet Loss      :",
+        packet_loss,
+        "%"
+    )
+
+    print(
+        "Traffic Rate     :",
+        traffic_rate,
+        "Mbps"
+    )
+
+    print(
+        "Link Capacity    :",
+        link_capacity,
+        "Mbps"
+    )
+
+    print("\nNORMALIZED METRICS")
+    print("------------------------------------------")
+
+    print(
+        "Normalized Delay :",
+        round(
+            result["delay_normalized"],
+            4
+        )
+    )
+
+    print(
+        "Normalized Jitter:",
+        round(
+            result["jitter_normalized"],
+            4
+        )
+    )
+
+    print(
+        "Normalized Loss  :",
+        round(
+            result["loss_normalized"],
+            4
+        )
+    )
+
+    print(
+        "Utilization      :",
+        round(
+            result["utilization"],
+            4
+        )
+    )
+
+    print("\nWEIGHTED COST COMPONENTS")
+    print("------------------------------------------")
+
+    print(
+        "Delay Cost       :",
+        round(
+            result["delay_cost"],
+            4
+        )
+    )
+
+    print(
+        "Jitter Cost      :",
+        round(
+            result["jitter_cost"],
+            4
+        )
+    )
+
+    print(
+        "Loss Cost        :",
+        round(
+            result["loss_cost"],
+            4
+        )
+    )
+
+    print(
+        "Utilization Cost :",
+        round(
+            result["utilization_cost"],
+            4
+        )
+    )
+
+    print("\n==========================================")
+
+    print(
+        "FINAL QoS COST   :",
+        round(
+            result["total_cost"],
+            4
+        )
+    )
+
+    print("==========================================")
+
+Save:
+
+Ctrl + O
+Enter
+Ctrl + X
+17.2 Check the code
+
+Run:
+
+python3 -m py_compile controller/qos_cost.py
+
+Correct result = no output.
+
+Then run:
+
+python3 controller/qos_cost.py
+17.3 Expected result
+
+Using your Step 16 values:
+
+Delay       = 22.742 ms
+Jitter      = 2.232 ms
+Loss        = 18%
+
+and our test traffic condition:
+
+Traffic     = 4 Mbps
+Capacity    = 10 Mbps
+
+utilization becomes:
+
+$$ U=\frac{4}{10}=0.4 $$
+
+or:
+
+$$ 40\% $$
+
+The normalization should approximately produce:
+
+Normalized Delay  = 0.2274
+Normalized Jitter = 0.0446
+Normalized Loss   = 0.1800
+Utilization       = 0.4000
+
+Then:
+
+$$ C= 0.30(0.2274)+ 0.20(0.0446)+ 0.30(0.18)+ 0.20(0.40) $$
+
+which gives approximately:
+
+$$ \boxed{C\approx0.2111} $$
+
+So you should see something similar to:
+
+==========================================
+MedRoute Step 17
+SDN Multi-Metric QoS Cost Calculation
+==========================================
+
+RAW NETWORK METRICS
+------------------------------------------
+Delay            : 22.742 ms
+Jitter           : 2.232 ms
+Packet Loss      : 18.0 %
+Traffic Rate     : 4.0 Mbps
+Link Capacity    : 10.0 Mbps
+
+NORMALIZED METRICS
+------------------------------------------
+Normalized Delay : 0.2274
+Normalized Jitter: 0.0446
+Normalized Loss  : 0.18
+Utilization      : 0.4
+
+WEIGHTED COST COMPONENTS
+------------------------------------------
+Delay Cost       : 0.0682
+Jitter Cost      : 0.0089
+Loss Cost        : 0.054
+Utilization Cost : 0.08
+
+==========================================
+FINAL QoS COST   : 0.2111
+==========================================
+17.4 Now test whether the cost reacts correctly
+
+This part is important. We don't just want code that produces a number; we want to demonstrate that worse network conditions produce a higher cost.
+
+Open:
+
+nano controller/qos_cost.py
+
+Go to the bottom and temporarily change:
+
+traffic_rate = 4.0
+
+to:
+
+traffic_rate = 9.0
+
+Save and run:
+
+python3 controller/qos_cost.py
+
+Now:
+
+$$ U=\frac{9}{10}=0.9 $$
+
+So utilization is:
+
+0.9000
+
+and the total cost should increase to approximately:
+
+$$ 0.3111 $$
+
+That's exactly the behavior we need:
+
+4 Mbps
+   ↓
+40% utilization
+   ↓
+Cost ≈ 0.2111
+
+versus
+
+9 Mbps
+   ↓
+90% utilization
+   ↓
+Cost ≈ 0.3111
+
+More congestion → higher cost.
+
+After testing, change it back to:
+
+traffic_rate = 4.0
+What exactly did Step 17 accomplish?
+
+Before Step 17 we had independent measurements:
+
+22.742 ms
+2.232 ms
+18%
+4 Mbps
+
+Now we transform them:
+
+                  SDN Measurements
+                         │
+         ┌───────────────┼───────────────┐
+         ↓               ↓               ↓
+      Delay           Jitter           Loss
+                         +
+                  Traffic Rate
+                         │
+                         ↓
+                    Utilization
+                         │
+                         ↓
+                   Normalization
+                         │
+                         ↓
+              Weighted QoS Calculation
+                         │
+                         ↓
+                    QoS COST
+
+And lower cost means:
+
+better network condition
+
+while higher cost means:
+
+worse network condition
+
+One important limitation right now
+
+There's a distinction you should understand.
+
+In this test:
+
+traffic_rate = 4.0
+
+is a test value.
+
+It is not yet automatically coming from the Step 13 OpenFlow statistics.
+
+Likewise, the Step 16 measurements are entered into this standalone test.
+
+That's intentional.
+
+Step 17 answers:
+
+Does our mathematical cost engine work correctly?
+
+Step 18 is where we start connecting the cost system to the SDN controller and routing decision.
+
+Eventually:
+
+OpenFlow statistics ──────┐
+                          │
+Latency measurement ──────┤
+                          │
+Packet loss ──────────────┤
+                          ├──→ QoS Cost
+Jitter ───────────────────┤       ↓
+                          │   NetworkX
+Link capacity ────────────┘       ↓
+                              Best path
+                                  ↓
+                              OpenFlow
+
+That is the architecture we're aiming for — no AI involved.
+
+Run the normal 4 Mbps test and the 9 Mbps congestion test. If you get roughly 0.2111 and 0.3111, Step 17 is complete.
