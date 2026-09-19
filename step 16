@@ -1,0 +1,556 @@
+Yep 😭 — onto Step 16: Jitter Measurement.
+
+Good news: we already collected individual RTTs in Steps 14–15. So Step 16 doesn't require touching the Ryu controller. We'll calculate jitter from those RTT samples.
+
+Step 16 — Jitter Measurement
+
+For this project, we'll define measured jitter as the average absolute change between consecutive RTT measurements:
+
+$$ J=\frac{1}{N-1}\sum_{i=2}^{N}|RTT_i-RTT_{i-1}| $$
+
+For example, if:
+
+RTT = [20.5, 20.8, 20.6, 21.0]
+
+the changes are:
+
+0.3 ms
+0.2 ms
+0.4 ms
+
+and jitter is their average.
+
+This gives us another real measured QoS parameter for the later cost calculation.
+
+16.1 Back up Step 15
+cd /mnt/c/Users/subiw/medroute
+
+cp topology/network_monitor.py \
+topology/network_monitor_step15_backup.py
+16.2 Replace network_monitor.py
+
+We're making more than two changes, so here's the complete file, as requested.
+
+Open:
+
+nano topology/network_monitor.py
+
+Delete everything and paste:
+
+from mininet.net import Mininet
+from mininet.node import OVSKernelSwitch, RemoteController
+from mininet.link import TCLink
+from mininet.log import setLogLevel
+
+import time
+import re
+
+
+# ============================================================
+# PING RESULT PARSER
+# ============================================================
+
+def extract_ping_metrics(output):
+
+    metrics = {
+        "packets_transmitted": None,
+        "packets_received": None,
+        "packet_loss": None,
+        "min_latency": None,
+        "avg_latency": None,
+        "max_latency": None,
+        "individual_rtts": [],
+        "jitter": None
+    }
+
+    # --------------------------------------------------------
+    # TRANSMITTED / RECEIVED PACKETS
+    # --------------------------------------------------------
+
+    packet_match = re.search(
+        r"(\d+) packets transmitted, "
+        r"(\d+) received",
+        output
+    )
+
+    if packet_match:
+
+        metrics["packets_transmitted"] = int(
+            packet_match.group(1)
+        )
+
+        metrics["packets_received"] = int(
+            packet_match.group(2)
+        )
+
+    # --------------------------------------------------------
+    # PACKET LOSS
+    # --------------------------------------------------------
+
+    loss_match = re.search(
+        r"(\d+(?:\.\d+)?)% packet loss",
+        output
+    )
+
+    if loss_match:
+
+        metrics["packet_loss"] = float(
+            loss_match.group(1)
+        )
+
+    # --------------------------------------------------------
+    # MIN / AVG / MAX RTT
+    # --------------------------------------------------------
+
+    latency_match = re.search(
+        r"=\s*([\d.]+)/([\d.]+)/([\d.]+)/",
+        output
+    )
+
+    if latency_match:
+
+        metrics["min_latency"] = float(
+            latency_match.group(1)
+        )
+
+        metrics["avg_latency"] = float(
+            latency_match.group(2)
+        )
+
+        metrics["max_latency"] = float(
+            latency_match.group(3)
+        )
+
+    # --------------------------------------------------------
+    # INDIVIDUAL RTT VALUES
+    # --------------------------------------------------------
+
+    rtts = re.findall(
+        r"time[=<]([\d.]+)\s*ms",
+        output
+    )
+
+    metrics["individual_rtts"] = [
+        float(value)
+        for value in rtts
+    ]
+
+    # --------------------------------------------------------
+    # STEP 16 - JITTER
+    #
+    # Average absolute difference between
+    # consecutive RTT measurements.
+    # --------------------------------------------------------
+
+    rtt_values = metrics["individual_rtts"]
+
+    if len(rtt_values) >= 2:
+
+        differences = []
+
+        for i in range(
+            1,
+            len(rtt_values)
+        ):
+
+            difference = abs(
+                rtt_values[i] -
+                rtt_values[i - 1]
+            )
+
+            differences.append(
+                difference
+            )
+
+        metrics["jitter"] = (
+            sum(differences) /
+            len(differences)
+        )
+
+    return metrics
+
+
+# ============================================================
+# DISPLAY RESULTS
+# ============================================================
+
+def display_metrics(metrics):
+
+    print("\n==========================================")
+    print("MedRoute SDN QoS Measurements")
+    print("==========================================")
+
+    print(
+        "Packets Transmitted :",
+        metrics["packets_transmitted"]
+    )
+
+    print(
+        "Packets Received    :",
+        metrics["packets_received"]
+    )
+
+    print(
+        "Packet Loss         :",
+        metrics["packet_loss"],
+        "%"
+    )
+
+    if metrics["min_latency"] is not None:
+
+        print(
+            "Minimum RTT         :",
+            round(
+                metrics["min_latency"],
+                3
+            ),
+            "ms"
+        )
+
+    if metrics["avg_latency"] is not None:
+
+        print(
+            "Average RTT         :",
+            round(
+                metrics["avg_latency"],
+                3
+            ),
+            "ms"
+        )
+
+    if metrics["max_latency"] is not None:
+
+        print(
+            "Maximum RTT         :",
+            round(
+                metrics["max_latency"],
+                3
+            ),
+            "ms"
+        )
+
+    # --------------------------------------------------------
+    # STEP 16 - DISPLAY JITTER
+    # --------------------------------------------------------
+
+    if metrics["jitter"] is not None:
+
+        print(
+            "Jitter              :",
+            round(
+                metrics["jitter"],
+                3
+            ),
+            "ms"
+        )
+
+    print(
+        "Individual RTTs     :",
+        metrics["individual_rtts"]
+    )
+
+    print("==========================================")
+
+
+# ============================================================
+# MININET NETWORK
+# ============================================================
+
+def run():
+
+    net = Mininet(
+        switch=OVSKernelSwitch,
+        link=TCLink,
+        controller=None
+    )
+
+    # --------------------------------------------------------
+    # RYU CONTROLLER
+    # --------------------------------------------------------
+
+    net.addController(
+        "c0",
+        controller=RemoteController,
+        ip="127.0.0.1",
+        port=6653
+    )
+
+    # --------------------------------------------------------
+    # HOSTS
+    # --------------------------------------------------------
+
+    h1 = net.addHost(
+        "h1",
+        ip="10.0.0.1/8"
+    )
+
+    h2 = net.addHost(
+        "h2",
+        ip="10.0.0.2/8"
+    )
+
+    # --------------------------------------------------------
+    # SWITCHES
+    # --------------------------------------------------------
+
+    s1 = net.addSwitch(
+        "s1",
+        protocols="OpenFlow13"
+    )
+
+    s2 = net.addSwitch(
+        "s2",
+        protocols="OpenFlow13"
+    )
+
+    s3 = net.addSwitch(
+        "s3",
+        protocols="OpenFlow13"
+    )
+
+    s4 = net.addSwitch(
+        "s4",
+        protocols="OpenFlow13"
+    )
+
+    # --------------------------------------------------------
+    # HOST LINKS FIRST
+    #
+    # h1 -> s1 port 1
+    # h2 -> s4 port 1
+    # --------------------------------------------------------
+
+    net.addLink(
+        h1,
+        s1
+    )
+
+    net.addLink(
+        h2,
+        s4
+    )
+
+    # ========================================================
+    # PATH 1
+    #
+    # s1 -> s2 -> s4
+    #
+    # Low delay
+    # Controlled packet loss
+    # ========================================================
+
+    net.addLink(
+        s1,
+        s2,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    net.addLink(
+        s2,
+        s4,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    # ========================================================
+    # PATH 2
+    #
+    # s1 -> s3 -> s4
+    #
+    # Higher delay
+    # No configured loss
+    # ========================================================
+
+    net.addLink(
+        s1,
+        s3,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    net.addLink(
+        s3,
+        s4,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    # --------------------------------------------------------
+    # START NETWORK
+    # --------------------------------------------------------
+
+    net.start()
+
+    print(
+        "\nWaiting for SDN topology discovery..."
+    )
+
+    time.sleep(5)
+
+    # --------------------------------------------------------
+    # STEP 16 TEST
+    # --------------------------------------------------------
+
+    print("\n==========================================")
+    print("MedRoute Step 16")
+    print("SDN Jitter Measurement")
+    print("==========================================")
+
+    print(
+        "\nSending 50 ICMP packets "
+        "from h1 to h2...\n"
+    )
+
+    ping_output = h1.cmd(
+        "ping -c 50 -i 0.1 10.0.0.2"
+    )
+
+    print(
+        ping_output
+    )
+
+    # --------------------------------------------------------
+    # PARSE ALL QoS METRICS
+    # --------------------------------------------------------
+
+    metrics = extract_ping_metrics(
+        ping_output
+    )
+
+    display_metrics(
+        metrics
+    )
+
+    # --------------------------------------------------------
+    # KEEP NETWORK ALIVE
+    # --------------------------------------------------------
+
+    input(
+        "\nPress ENTER to stop Mininet..."
+    )
+
+    net.stop()
+
+
+if __name__ == "__main__":
+
+    setLogLevel(
+        "info"
+    )
+
+    run()
+
+Save:
+
+Ctrl + O
+Enter
+Ctrl + X
+16.3 Check syntax
+
+Run:
+
+python3 -m py_compile topology/network_monitor.py
+
+No output = ✅
+
+16.4 Clean Mininet
+sudo mn -c
+16.5 Terminal 1 — Ryu
+
+No controller changes.
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+
+ryu-manager --observe-links controller/medroute_controller.py
+16.6 Terminal 2 — Run Step 16
+cd /mnt/c/Users/subiw/medroute
+
+sudo python3 topology/network_monitor.py
+
+Wait for all 50 pings.
+
+16.7 Expected result
+
+You should now get:
+
+==========================================
+MedRoute SDN QoS Measurements
+==========================================
+Packets Transmitted : 50
+Packets Received    : ...
+Packet Loss         : ... %
+Minimum RTT         : ... ms
+Average RTT         : ... ms
+Maximum RTT         : ... ms
+Jitter              : ... ms
+Individual RTTs     : [...]
+==========================================
+
+The important new line is:
+
+Jitter : ... ms
+One thing about your previous Step 15 result
+
+You had:
+
+127.0 ms
+20.6 ms
+20.9 ms
+20.7 ms
+...
+
+That first 127 ms measurement is much larger than the rest.
+
+Because our jitter calculation uses consecutive differences, the transition:
+
+$$ |20.6-127.0|=106.4ms $$
+
+will significantly increase the jitter result.
+
+Don't remove it manually.
+
+The experiment genuinely observed that RTT sample. For now we preserve raw network behavior. Later, when designing our cost engine, we'll decide carefully whether to use instantaneous measurements, rolling averages, smoothing, or another robust aggregation method.
+
+What Step 16 gives us
+
+We now measure three major QoS characteristics:
+
+                    SDN NETWORK
+                         │
+        ┌────────────────┼────────────────┐
+        ↓                ↓                ↓
+     Latency         Packet Loss        Jitter
+       RTT                %                ms
+
+And Step 13 gave us:
+
+OpenFlow byte counters
+        ↓
+Traffic rate
+        ↓
+Utilization / congestion
+
+So we're getting to the important part.
+
+Cost calculation direction
+
+Once the metrics are properly prepared, our controller can evaluate links/path conditions using:
+
+$$ Cost = w_DD_N + w_JJ_N + w_LL_N + w_UU_N $$
+
+where _N means normalized, because we cannot sensibly add something like 20 ms + 5% + 7 Mbps directly.
+
+That's what makes the upcoming cost-calculation stage important.
+
+Run Step 16 and send me only this block:
+
+MedRoute SDN QoS Measurements
+...
+
+If Jitter appears correctly, Step 16 is done and we'll proceed to the utilization/normalization and multi-metric SDN cost work.
