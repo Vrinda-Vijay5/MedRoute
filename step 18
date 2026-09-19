@@ -1,0 +1,563 @@
+Yes, agreed. 👍
+
+Whenever we reach a step where live data could reasonably be introduced, I will stop before implementing it and ask you first.
+
+Then we'll decide between:
+
+Option A: Keep everything simulated/Mininet + SDN measurements.
+Option B: Add live data/wearable input.
+
+Until you explicitly choose Option B, I will not add live-data integration.
+
+Everything else stays as decided: no AI/ML, SDN-focused, with delay + jitter + packet loss + utilization/congestion feeding into the cost calculation and eventually dynamic routing.
+
+For now, continue Step 17 exactly as given.
+
+step 18
+
+Great — Step 18 is where the project starts making routing decisions using cost instead of only hop count.
+
+One important boundary: no live/wearable integration in Step 18. When we reach a step where adding live health data makes sense, I’ll ask you first as agreed.
+
+Step 18 — Cost-Based Dynamic SDN Routing
+Goal
+
+Currently Ryu effectively does:
+
+$$ \text{Best Path}=\text{Shortest Path} $$
+
+Both routes have two links:
+
+Path A: s1 → s2 → s4
+Path B: s1 → s3 → s4
+
+So hop count alone cannot distinguish them.
+
+After Step 18, we want:
+
+$$ \boxed{\text{Best Path}=\arg\min_P\sum_{e\in P}Cost(e)} $$
+
+For this step, we'll first prove that NetworkX + our Step-17 QoS cost correctly changes the selected path when network conditions change.
+
+We will not yet rewrite the big Ryu controller. This avoids breaking Steps 1–17 before we've validated the routing logic.
+
+18.1 Create the routing test
+
+Run:
+
+cd /mnt/c/Users/subiw/medroute
+
+nano controller/cost_routing_test.py
+
+Paste this complete file:
+
+import networkx as nx
+
+from qos_cost import QoSCostCalculator
+
+
+# ============================================================
+# MEDROUTE STEP 18
+# COST-BASED SDN ROUTING
+# ============================================================
+
+class CostBasedRouter:
+
+    def __init__(self):
+
+        self.graph = nx.Graph()
+
+        self.cost_calculator = QoSCostCalculator()
+
+        # All Mininet inter-switch links
+        # currently use 10 Mbps capacity.
+        self.link_capacity_mbps = 10.0
+
+
+    # ========================================================
+    # CALCULATE LINK COST
+    # ========================================================
+
+    def calculate_link_cost(
+        self,
+        delay_ms,
+        jitter_ms,
+        packet_loss_percent,
+        traffic_rate_mbps
+    ):
+
+        result = self.cost_calculator.calculate_cost(
+            delay_ms=delay_ms,
+            jitter_ms=jitter_ms,
+            packet_loss_percent=packet_loss_percent,
+            traffic_rate_mbps=traffic_rate_mbps,
+            link_capacity_mbps=self.link_capacity_mbps
+        )
+
+        return result
+
+
+    # ========================================================
+    # ADD / UPDATE LINK
+    # ========================================================
+
+    def update_link(
+        self,
+        src,
+        dst,
+        delay_ms,
+        jitter_ms,
+        packet_loss_percent,
+        traffic_rate_mbps
+    ):
+
+        result = self.calculate_link_cost(
+            delay_ms,
+            jitter_ms,
+            packet_loss_percent,
+            traffic_rate_mbps
+        )
+
+        cost = result["total_cost"]
+
+        self.graph.add_edge(
+            src,
+            dst,
+            weight=cost,
+
+            delay=delay_ms,
+            jitter=jitter_ms,
+            loss=packet_loss_percent,
+            traffic_rate=traffic_rate_mbps,
+
+            utilization=result["utilization"]
+        )
+
+        print(
+            "LINK s{} -> s{} | "
+            "delay={:.2f} ms | "
+            "jitter={:.2f} ms | "
+            "loss={:.2f}% | "
+            "traffic={:.2f} Mbps | "
+            "utilization={:.2f} | "
+            "cost={:.4f}".format(
+                src,
+                dst,
+                delay_ms,
+                jitter_ms,
+                packet_loss_percent,
+                traffic_rate_mbps,
+                result["utilization"],
+                cost
+            )
+        )
+
+
+    # ========================================================
+    # FIND MINIMUM-COST PATH
+    # ========================================================
+
+    def get_best_path(
+        self,
+        src,
+        dst
+    ):
+
+        try:
+
+            path = nx.shortest_path(
+                self.graph,
+                source=src,
+                target=dst,
+                weight="weight"
+            )
+
+            path_cost = nx.shortest_path_length(
+                self.graph,
+                source=src,
+                target=dst,
+                weight="weight"
+            )
+
+            return path, path_cost
+
+        except nx.NetworkXNoPath:
+
+            return None, None
+
+
+    # ========================================================
+    # DISPLAY PATH
+    # ========================================================
+
+    def display_best_path(
+        self,
+        src,
+        dst
+    ):
+
+        path, cost = self.get_best_path(
+            src,
+            dst
+        )
+
+        print("\n------------------------------------------")
+
+        if path is None:
+
+            print(
+                "No path available from "
+                "s{} to s{}".format(
+                    src,
+                    dst
+                )
+            )
+
+            return
+
+        readable_path = " -> ".join(
+            "s{}".format(node)
+            for node in path
+        )
+
+        print(
+            "SELECTED PATH :",
+            readable_path
+        )
+
+        print(
+            "TOTAL PATH COST:",
+            round(
+                cost,
+                4
+            )
+        )
+
+        print("------------------------------------------")
+
+
+# ============================================================
+# TEST SCENARIOS
+# ============================================================
+
+if __name__ == "__main__":
+
+    router = CostBasedRouter()
+
+    print("\n==========================================")
+    print("MedRoute Step 18")
+    print("Dynamic Cost-Based SDN Routing")
+    print("==========================================")
+
+    # ========================================================
+    # SCENARIO 1
+    #
+    # Upper path:
+    # s1 -> s2 -> s4
+    #
+    # Lower path:
+    # s1 -> s3 -> s4
+    #
+    # Upper path currently has better QoS.
+    # ========================================================
+
+    print("\nSCENARIO 1")
+    print("Normal Network Conditions")
+    print("==========================================")
+
+    # s1 -> s2
+    router.update_link(
+        src=1,
+        dst=2,
+        delay_ms=5.0,
+        jitter_ms=1.0,
+        packet_loss_percent=1.0,
+        traffic_rate_mbps=2.0
+    )
+
+    # s2 -> s4
+    router.update_link(
+        src=2,
+        dst=4,
+        delay_ms=5.0,
+        jitter_ms=1.0,
+        packet_loss_percent=1.0,
+        traffic_rate_mbps=2.0
+    )
+
+    # s1 -> s3
+    router.update_link(
+        src=1,
+        dst=3,
+        delay_ms=10.0,
+        jitter_ms=2.0,
+        packet_loss_percent=2.0,
+        traffic_rate_mbps=4.0
+    )
+
+    # s3 -> s4
+    router.update_link(
+        src=3,
+        dst=4,
+        delay_ms=10.0,
+        jitter_ms=2.0,
+        packet_loss_percent=2.0,
+        traffic_rate_mbps=4.0
+    )
+
+    router.display_best_path(
+        1,
+        4
+    )
+
+    # ========================================================
+    # SCENARIO 2
+    #
+    # Create congestion on the currently preferred
+    # upper path.
+    #
+    # We update s1-s2 and s2-s4 with:
+    #
+    # high utilization
+    # increased delay
+    # increased jitter
+    # increased packet loss
+    #
+    # SDN routing should move to the lower path.
+    # ========================================================
+
+    print("\n\nSCENARIO 2")
+    print("Congestion on Upper Path")
+    print("==========================================")
+
+    router.update_link(
+        src=1,
+        dst=2,
+        delay_ms=40.0,
+        jitter_ms=10.0,
+        packet_loss_percent=15.0,
+        traffic_rate_mbps=9.0
+    )
+
+    router.update_link(
+        src=2,
+        dst=4,
+        delay_ms=40.0,
+        jitter_ms=10.0,
+        packet_loss_percent=15.0,
+        traffic_rate_mbps=9.0
+    )
+
+    router.display_best_path(
+        1,
+        4
+    )
+
+    print("\n==========================================")
+    print("STEP 18 TEST COMPLETE")
+    print("==========================================")
+
+Save:
+
+Ctrl + O
+Enter
+Ctrl + X
+18.2 Check syntax
+
+Run:
+
+python3 -m py_compile controller/cost_routing_test.py
+
+Correct result:
+
+no output
+
+If you get an error, stop and send it to me.
+
+18.3 Run the test
+
+Run:
+
+python3 controller/cost_routing_test.py
+
+You do not need Mininet or Ryu running for this test.
+
+We're testing the routing algorithm independently first.
+
+18.4 What should happen?
+Scenario 1
+
+Upper path:
+
+s1 → s2 → s4
+
+has relatively good conditions:
+
+Delay       = 5 ms per link
+Jitter      = 1 ms
+Loss        = 1%
+Traffic     = 2 Mbps
+
+Lower path:
+
+s1 → s3 → s4
+
+has somewhat worse conditions:
+
+Delay       = 10 ms
+Jitter      = 2 ms
+Loss        = 2%
+Traffic     = 4 Mbps
+
+Therefore we expect:
+
+SELECTED PATH : s1 -> s2 -> s4
+18.5 Then we simulate congestion
+
+Scenario 2 changes the upper path to:
+
+Delay       = 40 ms
+Jitter      = 10 ms
+Loss        = 15%
+Traffic     = 9 Mbps
+
+Because capacity is:
+
+10 Mbps
+
+utilization becomes:
+
+$$ U=\frac{9}{10}=0.9 $$
+
+or:
+
+$$ 90\% $$
+
+The upper path cost therefore increases.
+
+Now the lower path remains:
+
+s1 → s3 → s4
+
+with its original lower cost.
+
+So we expect the routing decision to change to:
+
+SELECTED PATH : s1 -> s3 -> s4
+Expected overall behavior
+
+You should get something approximately like:
+
+==========================================
+MedRoute Step 18
+Dynamic Cost-Based SDN Routing
+==========================================
+
+SCENARIO 1
+Normal Network Conditions
+==========================================
+
+LINK s1 -> s2 | ... cost=...
+LINK s2 -> s4 | ... cost=...
+LINK s1 -> s3 | ... cost=...
+LINK s3 -> s4 | ... cost=...
+
+------------------------------------------
+SELECTED PATH : s1 -> s2 -> s4
+TOTAL PATH COST: ...
+------------------------------------------
+
+
+SCENARIO 2
+Congestion on Upper Path
+==========================================
+
+LINK s1 -> s2 | ... cost=...
+LINK s2 -> s4 | ... cost=...
+
+------------------------------------------
+SELECTED PATH : s1 -> s3 -> s4
+TOTAL PATH COST: ...
+------------------------------------------
+
+If you get exactly that path switch, Step 18's routing algorithm works.
+
+What Step 18 proves
+
+This is a major change from the original project.
+
+Old routing
+Network topology
+       ↓
+Hop count
+       ↓
+Shortest path
+       ↓
+OpenFlow
+
+Both:
+
+s1 → s2 → s4
+
+and
+
+s1 → s3 → s4
+
+have two hops.
+
+The controller therefore has no meaningful QoS basis for choosing one.
+
+New routing logic
+Delay ──────────┐
+Jitter ─────────┤
+Loss ───────────┼──→ Normalize
+Utilization ────┘        ↓
+                    Weighted Cost
+                         ↓
+                    Link Weight
+                         ↓
+                NetworkX Dijkstra
+                         ↓
+                Minimum-Cost Path
+
+That's the foundation of the SDN system your teacher asked for.
+
+But there's one distinction I want you to be able to explain
+
+At the end of Step 18, we have proven:
+
+The routing algorithm can dynamically select a different path based on multi-metric QoS cost.
+
+We have not yet proven:
+
+“The controller automatically obtains all four live link metrics and reroutes actual packets in Mininet in real time.”
+
+Some of our metrics in this Step 18 test are deliberately supplied test values.
+
+We shouldn't blur those two claims.
+
+The later integration stage connects the validated cost/routing logic with the actual Ryu/OpenFlow network measurements.
+
+Progress now
+Component	Status
+SDN topology	✅
+OpenFlow forwarding	✅
+Topology discovery	✅
+Port statistics	✅
+Traffic rate	✅
+Delay/RTT measurement	✅
+Packet-loss measurement	✅
+Jitter measurement	✅
+QoS normalization	✅
+Multi-metric cost	✅
+Cost-based path selection	🔄 Step 18
+Actual dynamic Ryu rerouting	Next integration phase
+Healthcare criticality	Later
+Braess detection	Later
+AI/ML	❌ Removed
+
+Run:
+
+python3 controller/cost_routing_test.py
+
+If Scenario 1 chooses s1 → s2 → s4 and Scenario 2 chooses s1 → s3 → s4, send me that output. Then Step 18 is complete and we'll move to integrating this logic properly into the SDN controller.
