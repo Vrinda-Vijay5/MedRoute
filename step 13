@@ -1,0 +1,309 @@
+Locked in:
+
+No AI/ML. MedRoute stays 100% SDN-based.
+Live wearable data: postponed; we'll decide later.
+Cost calculation: becomes a core part of the project using real network measurements.
+
+Since Steps 1–12 are complete, we now start collecting the real network statistics needed for that cost function.
+
+Step 13 — Real OpenFlow Port Statistics
+Objective
+
+Right now our congestion module understands utilization if we give it numbers manually:
+
+$$ Utilization = \frac{Used\ Bandwidth}{Link\ Capacity} $$
+
+But we don't want manually supplied numbers.
+
+Ryu should ask the OpenFlow switches:
+
+How many bytes and packets have passed through each port?
+
+From two measurements we calculate actual traffic rate:
+
+$$ Rate=\frac{Bytes_{new}-Bytes_{old}}{Time_{new}-Time_{old}} $$
+
+This will eventually feed our cost:
+
+$$ Cost=w_1(Latency)+w_2(Jitter)+w_3(Loss)+w_4(Utilization) $$
+
+Today, Step 13 only collects real port statistics and calculates traffic rate.
+
+13.1 Back up your working controller first
+
+Very important because your current controller works.
+
+cd /mnt/c/Users/subiw/medroute
+cp controller/medroute_controller.py controller/medroute_controller_step12_backup.py
+
+Confirm:
+
+ls controller/
+
+You should see both files.
+
+13.2 Add Ryu's hub library
+
+Open:
+
+nano controller/medroute_controller.py
+
+At the top, with your other imports, add:
+
+from ryu.lib import hub
+
+Don't remove anything else.
+
+13.3 Add statistics variables
+
+Inside your existing __init__() find approximately:
+
+self.port_map = {}
+
+Below your existing initialization variables, add:
+
+self.previous_port_stats = {}
+self.port_rates = {}
+
+self.monitor_thread = hub.spawn(
+    self.monitor_ports
+)
+
+So conceptually you now have:
+
+self.graph = nx.Graph()
+self.port_map = {}
+
+self.previous_port_stats = {}
+self.port_rates = {}
+
+self.monitor_thread = hub.spawn(
+    self.monitor_ports
+)
+
+Keep your existing congestion-monitor/link-weight code from Step 12 as it is.
+
+13.4 Add the monitoring function
+
+Add this method inside MedRouteController, before your packet-in handler:
+
+def monitor_ports(self):
+
+    while True:
+
+        for datapath in self.datapaths.values():
+
+            self.request_port_stats(datapath)
+
+        hub.sleep(5)
+
+This means:
+
+Every 5 seconds
+      ↓
+Ryu asks every switch
+      ↓
+"Give me your port statistics"
+13.5 Add the OpenFlow statistics request
+
+Below monitor_ports(), add:
+
+def request_port_stats(self, datapath):
+
+    parser = datapath.ofproto_parser
+    ofproto = datapath.ofproto
+
+    request = parser.OFPPortStatsRequest(
+        datapath,
+        0,
+        ofproto.OFPP_ANY
+    )
+
+    datapath.send_msg(request)
+
+This is an actual OpenFlow request from Ryu to OVS.
+
+13.6 Process the replies
+
+Now add:
+
+@set_ev_cls(
+    ofp_event.EventOFPPortStatsReply,
+    MAIN_DISPATCHER
+)
+def port_stats_reply_handler(self, ev):
+
+    datapath = ev.msg.datapath
+    dpid = datapath.id
+
+    current_time = time.time()
+
+    for stat in ev.msg.body:
+
+        port_no = stat.port_no
+
+        # Ignore special OpenFlow ports
+        if port_no > 0xffffff00:
+            continue
+
+        total_bytes = stat.rx_bytes + stat.tx_bytes
+        total_packets = stat.rx_packets + stat.tx_packets
+
+        key = (dpid, port_no)
+
+        if key in self.previous_port_stats:
+
+            previous = self.previous_port_stats[key]
+
+            byte_difference = (
+                total_bytes - previous["bytes"]
+            )
+
+            time_difference = (
+                current_time - previous["time"]
+            )
+
+            if time_difference > 0:
+
+                bytes_per_second = (
+                    byte_difference / time_difference
+                )
+
+                bits_per_second = (
+                    bytes_per_second * 8
+                )
+
+                mbps = (
+                    bits_per_second / 1_000_000
+                )
+
+                self.port_rates[key] = mbps
+
+                print(
+                    "PORT STATS | "
+                    "s{} port {} | "
+                    "packets={} | "
+                    "bytes={} | "
+                    "rate={:.4f} Mbps".format(
+                        dpid,
+                        port_no,
+                        total_packets,
+                        total_bytes,
+                        mbps
+                    )
+                )
+
+        self.previous_port_stats[key] = {
+            "bytes": total_bytes,
+            "time": current_time
+        }
+One additional import
+
+Because this code uses:
+
+time.time()
+
+make sure this exists at the top:
+
+import time
+
+If import time is already present, don't add it twice.
+
+13.7 Save
+
+In nano:
+
+Ctrl + O
+Enter
+Ctrl + X
+
+Before starting Mininet, check Python syntax:
+
+python3 -m py_compile controller/medroute_controller.py
+
+Expected: no output.
+
+If you get an error, stop there and send me the error.
+
+13.8 Clean the previous network
+sudo mn -c
+13.9 Start Ryu
+
+Terminal 1:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+ryu-manager --observe-links controller/medroute_controller.py
+
+Then run your working topology/monitor in Terminal 2 as usual:
+
+cd /mnt/c/Users/subiw/medroute
+sudo python3 topology/network_monitor.py
+
+Keep Mininet alive when it says:
+
+Press ENTER to stop Mininet...
+
+Don't press Enter yet.
+
+13.10 What you should see
+
+After approximately 5–10 seconds, Terminal 1 should start printing lines similar to:
+
+PORT STATS | s1 port 1 | packets=25 | bytes=1836 | rate=0.0012 Mbps
+PORT STATS | s1 port 2 | packets=34 | bytes=2490 | rate=0.0021 Mbps
+PORT STATS | s1 port 3 | packets=30 | bytes=2180 | rate=0.0018 Mbps
+
+PORT STATS | s2 port 1 | packets=20 | bytes=1450 | rate=0.0013 Mbps
+
+PORT STATS | s3 port 1 | packets=28 | bytes=2030 | rate=0.0017 Mbps
+
+PORT STATS | s4 port 1 | packets=24 | bytes=1750 | rate=0.0015 Mbps
+
+Don't worry if your actual numbers are tiny. Ping generates very little traffic.
+
+Also don't worry if some ports show:
+
+rate=0.0000 Mbps
+
+That can simply mean there was almost no traffic during that 5-second interval.
+
+What Step 13 proves
+
+Before Step 13:
+
+Mininet
+   ↓
+Ryu
+   ↓
+Routing
+
+After Step 13:
+
+              RYU SDN CONTROLLER
+                     │
+              OpenFlow request
+                     ↓
+                    OVS
+                     │
+             PortStatsReply
+                     ↓
+          RX/TX bytes + packets
+                     │
+                     ↓
+            Traffic rate (Mbps)
+                     │
+                     ↓
+             Network state
+
+This is important for your teacher's requirement because these are real measurements from the emulated SDN network, not a dataset and not AI.
+
+Don't calculate the final cost yet
+
+Step 13 gives us:
+
+real packets + real bytes + real traffic rate.
+
+Next we'll convert this into usable network metrics. Then we'll obtain delay/latency, loss and jitter before combining everything into the final SDN cost function.
+
+Do Step 13 only now. If the terminal starts printing PORT STATS correctly while the network is running, send me a few lines of the output and we'll mark Step 13 complete and move to Step 14.
