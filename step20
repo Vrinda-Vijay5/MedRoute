@@ -1,0 +1,648 @@
+Assuming Step 19 gave you NORMAL, URGENT, CRITICAL, URGENT, we can continue.
+
+Step 20 — Criticality-Aware SDN Cost Routing
+
+This is where Step 17 + Step 18 + Step 19 come together.
+
+We will not add live data yet. Step 20 uses test patient values. As agreed, before any live-data implementation, I'll ask you first.
+
+The idea is:
+
+Patient/test data
+       ↓
+Rule-based criticality
+       ↓
+NORMAL / URGENT / CRITICAL
+       ↓
+Different QoS weights
+       ↓
+Delay + Jitter + Loss + Utilization
+       ↓
+QoS Cost
+       ↓
+Minimum-cost route
+
+The important difference is that the same network can now produce different routing decisions for different traffic classes.
+
+20.1 What changes with criticality?
+
+Our four network metrics remain:
+
+$$ D=\text{delay},\quad J=\text{jitter},\quad L=\text{loss},\quad U=\text{utilization} $$
+
+But instead of one fixed cost formula for every packet, we use:
+
+$$ C_k=w_{D,k}D_N+w_{J,k}J_N+w_{L,k}L_N+w_{U,k}U $$
+
+where \(k\) is the traffic class.
+
+For this prototype we'll use these experimental networking policies:
+
+Class	Delay	Jitter	Loss	Utilization
+NORMAL	0.20	0.10	0.20	0.50
+URGENT	0.30	0.20	0.30	0.20
+CRITICAL	0.40	0.25	0.30	0.05
+
+All rows sum to 1.0.
+
+The idea is that NORMAL traffic strongly avoids congestion, while CRITICAL traffic places much more emphasis on delay, jitter, and loss.
+
+These are prototype policy weights, not medically validated values.
+
+20.2 Don't modify the Ryu controller yet
+
+We're going to validate this logic first.
+
+Create:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+
+nano controller/criticality_routing_test.py
+
+Paste this entire file:
+
+import networkx as nx
+
+from qos_cost import QoSCostCalculator
+from health_criticality import HealthCriticalityClassifier
+
+
+# ============================================================
+# MEDROUTE
+# STEP 20
+# CRITICALITY-AWARE SDN ROUTING
+# ============================================================
+
+class CriticalityAwareRouter:
+
+    def __init__(self):
+
+        self.classifier = HealthCriticalityClassifier()
+        self.cost_calculator = QoSCostCalculator()
+
+        self.link_capacity_mbps = 10.0
+
+        # ----------------------------------------------------
+        # Prototype SDN QoS policies
+        #
+        # These are experimental networking weights.
+        # They are NOT medical treatment/diagnostic rules.
+        # ----------------------------------------------------
+
+        self.qos_policies = {
+
+            "NORMAL": {
+                "delay": 0.20,
+                "jitter": 0.10,
+                "loss": 0.20,
+                "utilization": 0.50
+            },
+
+            "URGENT": {
+                "delay": 0.30,
+                "jitter": 0.20,
+                "loss": 0.30,
+                "utilization": 0.20
+            },
+
+            "CRITICAL": {
+                "delay": 0.40,
+                "jitter": 0.25,
+                "loss": 0.30,
+                "utilization": 0.05
+            }
+        }
+
+
+    # ========================================================
+    # CALCULATE COST USING TRAFFIC CLASS
+    # ========================================================
+
+    def calculate_cost(
+        self,
+        traffic_class,
+        delay_ms,
+        jitter_ms,
+        packet_loss_percent,
+        traffic_rate_mbps
+    ):
+
+        policy = self.qos_policies[
+            traffic_class
+        ]
+
+        # Normalize delay
+        delay_n = self.cost_calculator.normalize(
+            delay_ms,
+            self.cost_calculator.max_delay_ms
+        )
+
+        # Normalize jitter
+        jitter_n = self.cost_calculator.normalize(
+            jitter_ms,
+            self.cost_calculator.max_jitter_ms
+        )
+
+        # Normalize loss
+        loss_n = self.cost_calculator.normalize(
+            packet_loss_percent,
+            self.cost_calculator.max_packet_loss_percent
+        )
+
+        # Utilization
+        utilization = (
+            self.cost_calculator.calculate_utilization(
+                traffic_rate_mbps,
+                self.link_capacity_mbps
+            )
+        )
+
+        # Criticality-aware cost
+        total_cost = (
+
+            policy["delay"] * delay_n
+
+            + policy["jitter"] * jitter_n
+
+            + policy["loss"] * loss_n
+
+            + policy["utilization"] * utilization
+        )
+
+        return {
+            "delay_n": delay_n,
+            "jitter_n": jitter_n,
+            "loss_n": loss_n,
+            "utilization": utilization,
+            "total_cost": total_cost
+        }
+
+
+    # ========================================================
+    # BUILD GRAPH FOR ONE TRAFFIC CLASS
+    # ========================================================
+
+    def build_graph(
+        self,
+        traffic_class
+    ):
+
+        graph = nx.Graph()
+
+        # ----------------------------------------------------
+        # NETWORK CONDITIONS
+        #
+        # Path A:
+        # s1 -> s2 -> s4
+        #
+        # Better latency/reliability,
+        # but HIGH utilization.
+        #
+        # Path B:
+        # s1 -> s3 -> s4
+        #
+        # Worse latency/reliability,
+        # but LOW utilization.
+        #
+        # This creates a real trade-off.
+        # ----------------------------------------------------
+
+        links = [
+
+            # ================================================
+            # PATH A
+            # Fast/reliable but congested
+            # ================================================
+
+            {
+                "src": 1,
+                "dst": 2,
+                "delay": 5.0,
+                "jitter": 1.0,
+                "loss": 1.0,
+                "traffic": 9.0
+            },
+
+            {
+                "src": 2,
+                "dst": 4,
+                "delay": 5.0,
+                "jitter": 1.0,
+                "loss": 1.0,
+                "traffic": 9.0
+            },
+
+            # ================================================
+            # PATH B
+            # Less congested but slower / less reliable
+            # ================================================
+
+            {
+                "src": 1,
+                "dst": 3,
+                "delay": 25.0,
+                "jitter": 8.0,
+                "loss": 8.0,
+                "traffic": 2.0
+            },
+
+            {
+                "src": 3,
+                "dst": 4,
+                "delay": 25.0,
+                "jitter": 8.0,
+                "loss": 8.0,
+                "traffic": 2.0
+            }
+        ]
+
+        for link in links:
+
+            result = self.calculate_cost(
+                traffic_class=traffic_class,
+                delay_ms=link["delay"],
+                jitter_ms=link["jitter"],
+                packet_loss_percent=link["loss"],
+                traffic_rate_mbps=link["traffic"]
+            )
+
+            graph.add_edge(
+                link["src"],
+                link["dst"],
+                weight=result["total_cost"]
+            )
+
+            print(
+                "s{} -> s{} | "
+                "D={:.1f}ms "
+                "J={:.1f}ms "
+                "L={:.1f}% "
+                "U={:.0f}% "
+                "| COST={:.4f}".format(
+                    link["src"],
+                    link["dst"],
+                    link["delay"],
+                    link["jitter"],
+                    link["loss"],
+                    result["utilization"] * 100,
+                    result["total_cost"]
+                )
+            )
+
+        return graph
+
+
+    # ========================================================
+    # FIND BEST PATH
+    # ========================================================
+
+    def find_best_path(
+        self,
+        graph,
+        src,
+        dst
+    ):
+
+        path = nx.shortest_path(
+            graph,
+            source=src,
+            target=dst,
+            weight="weight"
+        )
+
+        cost = nx.shortest_path_length(
+            graph,
+            source=src,
+            target=dst,
+            weight="weight"
+        )
+
+        return path, cost
+
+
+    # ========================================================
+    # TEST PATIENT
+    # ========================================================
+
+    def test_patient(
+        self,
+        name,
+        heart_rate,
+        spo2
+    ):
+
+        traffic_class = self.classifier.classify(
+            heart_rate,
+            spo2
+        )
+
+        print("\n==========================================")
+        print(name)
+        print("==========================================")
+
+        print(
+            "Heart Rate    :",
+            heart_rate,
+            "bpm"
+        )
+
+        print(
+            "SpO2          :",
+            spo2,
+            "%"
+        )
+
+        print(
+            "Traffic Class :",
+            traffic_class
+        )
+
+        policy = self.qos_policies[
+            traffic_class
+        ]
+
+        print(
+            "QoS Weights   :",
+            policy
+        )
+
+        print("\nLINK COSTS")
+        print("------------------------------------------")
+
+        graph = self.build_graph(
+            traffic_class
+        )
+
+        path, cost = self.find_best_path(
+            graph,
+            1,
+            4
+        )
+
+        readable_path = " -> ".join(
+            "s{}".format(node)
+            for node in path
+        )
+
+        print("\nSELECTED PATH")
+        print("------------------------------------------")
+
+        print(
+            "Path       :",
+            readable_path
+        )
+
+        print(
+            "Total Cost :",
+            round(
+                cost,
+                4
+            )
+        )
+
+        return {
+            "patient": name,
+            "traffic_class": traffic_class,
+            "path": path,
+            "cost": cost
+        }
+
+
+# ============================================================
+# RUN STEP 20 TEST
+# ============================================================
+
+if __name__ == "__main__":
+
+    router = CriticalityAwareRouter()
+
+    print("\n==========================================")
+    print("MedRoute Step 20")
+    print("Criticality-Aware SDN Cost Routing")
+    print("==========================================")
+
+    # --------------------------------------------------------
+    # NORMAL traffic
+    # --------------------------------------------------------
+
+    normal_result = router.test_patient(
+        name="Patient A",
+        heart_rate=75,
+        spo2=98
+    )
+
+    # --------------------------------------------------------
+    # URGENT traffic
+    # --------------------------------------------------------
+
+    urgent_result = router.test_patient(
+        name="Patient B",
+        heart_rate=125,
+        spo2=93
+    )
+
+    # --------------------------------------------------------
+    # CRITICAL traffic
+    # --------------------------------------------------------
+
+    critical_result = router.test_patient(
+        name="Patient C",
+        heart_rate=150,
+        spo2=87
+    )
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
+    print("\n\n==========================================")
+    print("STEP 20 ROUTING SUMMARY")
+    print("==========================================")
+
+    results = [
+        normal_result,
+        urgent_result,
+        critical_result
+    ]
+
+    for result in results:
+
+        readable_path = " -> ".join(
+            "s{}".format(node)
+            for node in result["path"]
+        )
+
+        print(
+            "{:<10} | {:<8} | {}".format(
+                result["patient"],
+                result["traffic_class"],
+                readable_path
+            )
+        )
+
+    print("==========================================")
+
+Save:
+
+Ctrl + O
+Enter
+Ctrl + X
+20.3 Check syntax
+
+Run:
+
+python3 -m py_compile controller/criticality_routing_test.py
+
+Correct:
+
+(no output)
+
+Then:
+
+python3 controller/criticality_routing_test.py
+
+You do not need Ryu or Mininet running for this validation test.
+
+20.4 What should happen?
+
+We deliberately created a routing conflict.
+
+Path A — s1 → s2 → s4
+Delay       = LOW
+Jitter      = LOW
+Loss        = LOW
+Utilization = HIGH (90%)
+Path B — s1 → s3 → s4
+Delay       = HIGHER
+Jitter      = HIGHER
+Loss        = HIGHER
+Utilization = LOW (20%)
+
+So there isn't one universally "best" path.
+
+That's important.
+
+NORMAL traffic
+
+NORMAL has:
+
+Delay       weight = 0.20
+Jitter      weight = 0.10
+Loss        weight = 0.20
+Utilization weight = 0.50
+
+Congestion matters heavily.
+
+For Path A, per-link cost is approximately:
+
+$$ 0.2(0.05)+0.1(0.02)+0.2(0.01)+0.5(0.9) =0.464 $$
+
+Two links:
+
+$$ C_A\approx0.928 $$
+
+Path B:
+
+$$ 0.2(0.25)+0.1(0.16)+0.2(0.08)+0.5(0.2) =0.182 $$
+
+Two links:
+
+$$ C_B\approx0.364 $$
+
+So NORMAL should choose:
+
+s1 -> s3 -> s4
+CRITICAL traffic
+
+CRITICAL has:
+
+Delay       = 0.40
+Jitter      = 0.25
+Loss        = 0.30
+Utilization = 0.05
+
+Path A per-link:
+
+$$ 0.4(0.05)+0.25(0.02)+0.3(0.01)+0.05(0.9) =0.073 $$
+
+Total:
+
+$$ C_A\approx0.146 $$
+
+Path B per-link:
+
+$$ 0.4(0.25)+0.25(0.16)+0.3(0.08)+0.05(0.2) =0.174 $$
+
+Total:
+
+$$ C_B\approx0.348 $$
+
+So CRITICAL should choose:
+
+s1 -> s2 -> s4
+
+That's exactly the behavior we're trying to demonstrate.
+
+Expected summary
+
+The most important part of the output should look approximately like:
+
+==========================================
+STEP 20 ROUTING SUMMARY
+==========================================
+Patient A  | NORMAL   | s1 -> s3 -> s4
+Patient B  | URGENT   | ...
+Patient C  | CRITICAL | s1 -> s2 -> s4
+==========================================
+
+The URGENT result may depend on the intermediate policy and exact costs; that's fine. What's important for this controlled demonstration is that the policy can produce different cost calculations and path selections by traffic class.
+
+What Step 20 proves
+
+This is much more important than simply saying:
+
+“Critical packets get priority.”
+
+We're actually defining what that means mathematically.
+
+For the same physical SDN topology:
+
+                  s2
+                 /  \
+                /    \
+Patient →      s1    s4 → Destination
+                \    /
+                 \  /
+                  s3
+
+the routing policy can differ:
+
+NORMAL traffic
+      ↓
+Congestion-sensitive cost
+      ↓
+s1 → s3 → s4
+
+
+CRITICAL traffic
+      ↓
+Latency/reliability-sensitive cost
+      ↓
+s1 → s2 → s4
+
+That's application-aware SDN traffic engineering.
+
+Important project honesty
+
+At this exact point, the architecture consists of two validated parts:
+
+Actual SDN/network side: Mininet + OVS + Ryu + OpenFlow + topology discovery + forwarding + real port statistics + measured RTT/loss/jitter.
+
+Validated decision logic: normalization + multi-metric cost + criticality classifier + cost-based NetworkX route selection.
+
+The decision logic is not yet fully wired into the running Ryu controller. We should do that integration before presenting the whole thing as real-time criticality-aware rerouting.
+
+And we should not jump directly into Braess yet. The next integration stage should connect the cost/criticality logic into the actual Ryu/OpenFlow controller so that a calculated path becomes an actual installed network path.
+
+Run Step 20. If the summary shows NORMAL using s1 → s3 → s4 and CRITICAL using s1 → s2 → s4, Step 20 is complete.
