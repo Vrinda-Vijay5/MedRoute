@@ -1,0 +1,378 @@
+Assuming your Step 18 test successfully switched from s1 → s2 → s4 to s1 → s3 → s4 under congestion, we can move on.
+
+Step 19 — Healthcare Traffic Criticality Classification
+
+This is where we introduce the healthcare-specific part without AI.
+
+No ML. No prediction model. No dataset training.
+
+We will use a deterministic rule-based SDN traffic classification system.
+
+Also, this is not yet a live-data step, so there is nothing to decide about smartwatch integration yet. When we reach the first step where live data could be added, I'll ask you before doing anything.
+
+What Step 19 does
+
+Not every healthcare packet should have the same network priority.
+
+For example, we'll define three application traffic classes:
+
+CRITICAL
+URGENT
+NORMAL
+
+The classifier will assign a class from supplied physiological/test values using configurable prototype thresholds.
+
+Then Step 20 will use the class to change the QoS cost weights.
+
+Conceptually:
+
+Health/application data
+        ↓
+Rule-based classifier
+        ↓
+CRITICAL / URGENT / NORMAL
+        ↓
+SDN QoS policy
+        ↓
+Cost weights
+        ↓
+Routing decision
+
+For this prototype we'll use heart rate and SpO₂ as example inputs. These thresholds are demonstration rules for the networking prototype, not clinical decision rules.
+
+19.1 Create the classifier
+
+Activate the environment and go to the project:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+
+Create:
+
+nano controller/health_criticality.py
+
+Paste this entire file:
+
+# ============================================================
+# MEDROUTE
+# STEP 19 - RULE-BASED HEALTHCARE TRAFFIC CLASSIFICATION
+# ============================================================
+
+
+class HealthCriticalityClassifier:
+
+    # --------------------------------------------------------
+    # Traffic classes
+    # --------------------------------------------------------
+
+    NORMAL = "NORMAL"
+    URGENT = "URGENT"
+    CRITICAL = "CRITICAL"
+
+
+    def classify(
+        self,
+        heart_rate,
+        spo2
+    ):
+
+        """
+        Classify healthcare traffic using deterministic rules.
+
+        IMPORTANT:
+        These thresholds are prototype/test thresholds for
+        demonstrating SDN traffic prioritization.
+        They are NOT clinical diagnostic thresholds.
+        """
+
+        # ====================================================
+        # CRITICAL
+        # ====================================================
+
+        if (
+            heart_rate < 40
+            or heart_rate > 140
+            or spo2 < 90
+        ):
+
+            return self.CRITICAL
+
+
+        # ====================================================
+        # URGENT
+        # ====================================================
+
+        if (
+            heart_rate < 50
+            or heart_rate > 120
+            or spo2 < 95
+        ):
+
+            return self.URGENT
+
+
+        # ====================================================
+        # NORMAL
+        # ====================================================
+
+        return self.NORMAL
+
+
+    # --------------------------------------------------------
+    # Explanation helper
+    # --------------------------------------------------------
+
+    def explain(
+        self,
+        heart_rate,
+        spo2
+    ):
+
+        criticality = self.classify(
+            heart_rate,
+            spo2
+        )
+
+        return {
+            "heart_rate": heart_rate,
+            "spo2": spo2,
+            "criticality": criticality
+        }
+
+
+# ============================================================
+# STEP 19 TEST
+# ============================================================
+
+if __name__ == "__main__":
+
+    classifier = HealthCriticalityClassifier()
+
+    print("\n==========================================")
+    print("MedRoute Step 19")
+    print("Rule-Based Healthcare Traffic Classifier")
+    print("==========================================")
+
+    test_cases = [
+
+        # Normal
+        {
+            "name": "Patient A",
+            "heart_rate": 75,
+            "spo2": 98
+        },
+
+        # Urgent
+        {
+            "name": "Patient B",
+            "heart_rate": 125,
+            "spo2": 93
+        },
+
+        # Critical
+        {
+            "name": "Patient C",
+            "heart_rate": 150,
+            "spo2": 87
+        },
+
+        # Another urgent example
+        {
+            "name": "Patient D",
+            "heart_rate": 45,
+            "spo2": 96
+        }
+    ]
+
+    for patient in test_cases:
+
+        result = classifier.explain(
+            patient["heart_rate"],
+            patient["spo2"]
+        )
+
+        print("\n------------------------------------------")
+
+        print(
+            "Patient        :",
+            patient["name"]
+        )
+
+        print(
+            "Heart Rate     :",
+            result["heart_rate"],
+            "bpm"
+        )
+
+        print(
+            "SpO2           :",
+            result["spo2"],
+            "%"
+        )
+
+        print(
+            "Traffic Class  :",
+            result["criticality"]
+        )
+
+    print("\n==========================================")
+    print("STEP 19 TEST COMPLETE")
+    print("==========================================")
+
+Save:
+
+Ctrl + O
+Enter
+Ctrl + X
+19.2 Check syntax
+
+Run:
+
+python3 -m py_compile controller/health_criticality.py
+
+Correct result:
+
+(no output)
+
+Then run:
+
+python3 controller/health_criticality.py
+19.3 Expected output
+
+You should get approximately:
+
+==========================================
+MedRoute Step 19
+Rule-Based Healthcare Traffic Classifier
+==========================================
+
+------------------------------------------
+Patient        : Patient A
+Heart Rate     : 75 bpm
+SpO2           : 98 %
+Traffic Class  : NORMAL
+
+------------------------------------------
+Patient        : Patient B
+Heart Rate     : 125 bpm
+SpO2           : 93 %
+Traffic Class  : URGENT
+
+------------------------------------------
+Patient        : Patient C
+Heart Rate     : 150 bpm
+SpO2           : 87 %
+Traffic Class  : CRITICAL
+
+------------------------------------------
+Patient        : Patient D
+Heart Rate     : 45 bpm
+SpO2           : 96 %
+Traffic Class  : URGENT
+
+==========================================
+STEP 19 TEST COMPLETE
+==========================================
+
+If you get those classifications, Step 19 works.
+
+Why are we doing this if we're removing AI?
+
+Because criticality-aware routing does not require AI.
+
+Our old concept would have been something like:
+
+Patient data
+    ↓
+ML model
+    ↓
+Predicted criticality
+
+We've removed that.
+
+Now it is:
+
+Patient/application data
+        ↓
+Explicit deterministic rules
+        ↓
+Traffic class
+
+That means the logic is transparent and reproducible.
+
+Your teacher can literally look at:
+
+if heart_rate > 140 or spo2 < 90:
+    return "CRITICAL"
+
+and understand exactly why the traffic was classified that way.
+
+Again, the specific numbers here are prototype networking thresholds, not a medical diagnosis system.
+
+What happens to these classes?
+
+This becomes much more interesting in Step 20.
+
+Suppose the network has:
+
+Path A:
+low delay
+some congestion
+
+Path B:
+higher delay
+low congestion
+
+For ordinary traffic, we might use one configurable engineering policy, while critical traffic might place more weight on delay, jitter and packet loss.
+
+For example, conceptually:
+
+NORMAL
+  ↓
+balanced QoS weights
+
+URGENT
+  ↓
+stronger reliability/latency emphasis
+
+CRITICAL
+  ↓
+strongest latency/loss/jitter emphasis
+
+So Step 20 will connect:
+
+$$ \text{Criticality} \rightarrow \text{QoS weights} \rightarrow \text{Cost} \rightarrow \text{Path} $$
+
+That's what makes the project healthcare-aware SDN routing, rather than just generic shortest-path routing.
+
+Current architecture
+        HEALTHCARE SIDE
+              │
+       physiological data
+              ↓
+     Rule-Based Classifier       ← STEP 19
+              │
+     NORMAL / URGENT / CRITICAL
+              │
+              ↓
+        SDN CONTROL SIDE
+              │
+ ┌────────────┼────────────┐
+ ↓            ↓            ↓
+Delay       Jitter        Loss
+              +
+         Utilization
+              │
+              ↓
+        QoS Cost Engine
+              │
+              ↓
+      Minimum-Cost Path
+              │
+              ↓
+             Ryu
+              │
+              ↓
+          OpenFlow/OVS
+
+Run the Step 19 test. If you get NORMAL, URGENT, CRITICAL, URGENT for Patients A–D, Step 19 is complete and Step 20 will integrate healthcare criticality with our SDN cost calculation.
