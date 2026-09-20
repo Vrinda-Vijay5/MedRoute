@@ -1,0 +1,88 @@
+Yes — the OFF/ON mechanism itself worked, but I would not mark Step 23 fully complete yet because the baseline result is suspicious:
+
+OFF: 70% loss, avg RTT 754 ms, +20 errors
+ON : 3.33% loss, avg RTT 21.48 ms
+
+The key clue is +20 errors and the enormous baseline RTT. With the candidate link OFF, Ryu may still temporarily believe s2 ↔ s3 exists because our controller handles EventLinkAdd but not EventLinkDelete. That can cause it to select a path through a disabled link until discovery catches up.
+
+So don't interpret this as Braess. In fact, this run shows the candidate link dramatically improving performance, not causing a Braess degradation.
+
+Fix Step 23 first
+
+Add link-deletion handling to medroute_controller.py. Put this directly below your existing link_add_handler:
+
+@set_ev_cls(event.EventLinkDelete)
+def link_delete_handler(self, ev):
+
+    src = ev.link.src.dpid
+    dst = ev.link.dst.dpid
+
+    self.logger.info(
+        "Link removed: %s -> %s",
+        src,
+        dst
+    )
+
+    self.update_topology()
+
+So that section becomes:
+
+@set_ev_cls(event.EventSwitchEnter)
+def switch_enter_handler(self, ev):
+    self.update_topology()
+
+
+@set_ev_cls(event.EventLinkAdd)
+def link_add_handler(self, ev):
+    self.update_topology()
+
+
+@set_ev_cls(event.EventLinkDelete)
+def link_delete_handler(self, ev):
+
+    src = ev.link.src.dpid
+    dst = ev.link.dst.dpid
+
+    self.logger.info(
+        "Link removed: %s -> %s",
+        src,
+        dst
+    )
+
+    self.update_topology()
+
+Then syntax check:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+python -m py_compile controller/medroute_controller.py
+
+If there's no output, clean everything:
+
+sudo mn -c
+
+Restart Ryu:
+
+ryu-manager --observe-links controller/medroute_controller.py
+
+Then rerun:
+
+sudo python3 topology/network_monitor.py
+What I want to see
+
+When Step 23 switches the candidate link OFF, Ryu should report removal of the cross-link and its topology should no longer contain:
+
+(2, 3)
+(3, 2)
+
+When Step 23 switches it ON, Ryu should eventually contain them again.
+
+Send me the Ryu output around:
+
+Link removed
+Topology:
+ROUTE
+
+plus the new OFF and ON ping summaries.
+
+Don't move to Step 24 yet. We want the experimental control mechanism clean before we start calculating Braess system cost; otherwise we'd be building the most important part of the project on misleading measurements.
