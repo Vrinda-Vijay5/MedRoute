@@ -1,0 +1,447 @@
+Step 22 is fine. ✅ COMPLETE.
+
+Your results confirm the important parts:
+
+s2 ↔ s3 exists physically: s2-eth3<->s3-eth3 (OK OK).
+s2 has its third live interface for the candidate link.
+h1 ↔ h2 connectivity works.
+The later 30% ping loss is not a Step 22 failure because your topology intentionally contains lossy links.
+traceroute: command not found is irrelevant; do not install anything for it.
+
+One thing we haven't seen in this paste is the Ryu topology line containing (2,3) and (3,2), but the Mininet/OVS evidence shows the physical candidate link is correctly created. When we run the next experiment, we'll verify controller discovery too.
+
+Step 23 — Candidate Link OFF vs ON Experiment
+
+Now we need to stop treating the cross-link as permanently present.
+
+We need an experiment where the same topology and traffic demand can be tested in two states:
+
+MODE A — BASELINE
+
+        s2
+       /  \
+h1 -- s1   s4 -- h2
+       \  /
+        s3
+
+s2 ↔ s3 = OFF
+
+versus:
+
+MODE B — CANDIDATE
+
+        s2
+       / | \
+h1 -- s1 |  s4 -- h2
+       \ | /
+        s3
+
+s2 ↔ s3 = ON
+
+We will keep the physical s2-s3 link and use Linux interface state to enable/disable it. That means the experiment can switch conditions without rebuilding Mininet.
+
+Since this requires multiple changes, replace the entire topology/network_monitor.py again.
+
+23.1 Replace network_monitor.py
+
+Exit Mininet:
+
+mininet> exit
+
+Then:
+
+sudo mn -c
+cd /mnt/c/Users/subiw/medroute
+cp topology/network_monitor.py topology/network_monitor_step22_backup.py
+nano topology/network_monitor.py
+
+Replace everything with:
+
+from mininet.net import Mininet
+from mininet.node import RemoteController, OVSSwitch
+from mininet.link import TCLink
+from mininet.log import setLogLevel, info
+from mininet.cli import CLI
+
+import time
+
+
+CANDIDATE_S2_INTERFACE = "s2-eth3"
+CANDIDATE_S3_INTERFACE = "s3-eth3"
+
+
+def set_candidate_link(s2, s3, enabled):
+    """
+    Enable or disable the Braess candidate link s2 <-> s3.
+
+    The physical TCLink remains present. Both interfaces are changed
+    together so that BASELINE and CANDIDATE experiments use the same
+    underlying topology.
+    """
+
+    state = "up" if enabled else "down"
+
+    s2.cmd(
+        "ip link set dev {} {}".format(
+            CANDIDATE_S2_INTERFACE,
+            state
+        )
+    )
+
+    s3.cmd(
+        "ip link set dev {} {}".format(
+            CANDIDATE_S3_INTERFACE,
+            state
+        )
+    )
+
+    time.sleep(3)
+
+    info(
+        "*** Braess candidate link s2 <-> s3: {}\n".format(
+            "ON" if enabled else "OFF"
+        )
+    )
+
+
+def show_candidate_state(s2, s3):
+
+    info("\n*** Candidate-link interface state\n")
+
+    state_s2 = s2.cmd(
+        "ip -br link show {}".format(
+            CANDIDATE_S2_INTERFACE
+        )
+    )
+
+    state_s3 = s3.cmd(
+        "ip -br link show {}".format(
+            CANDIDATE_S3_INTERFACE
+        )
+    )
+
+    info(state_s2)
+    info(state_s3)
+
+
+def run_ping_experiment(h1, h2, label):
+
+    info("\n")
+    info("=" * 60 + "\n")
+    info("{}\n".format(label))
+    info("=" * 60 + "\n")
+
+    # -q gives us a compact summary.
+    result = h1.cmd(
+        "ping -q -c 30 -i 0.1 10.0.0.2"
+    )
+
+    info(result)
+
+    info("=" * 60 + "\n")
+
+
+def create_network():
+
+    net = Mininet(
+        controller=None,
+        switch=OVSSwitch,
+        link=TCLink,
+        autoSetMacs=True,
+        build=False
+    )
+
+    info("*** Adding remote SDN controller\n")
+
+    c0 = net.addController(
+        "c0",
+        controller=RemoteController,
+        ip="127.0.0.1",
+        port=6653
+    )
+
+    info("*** Adding hosts\n")
+
+    h1 = net.addHost(
+        "h1",
+        ip="10.0.0.1/24"
+    )
+
+    h2 = net.addHost(
+        "h2",
+        ip="10.0.0.2/24"
+    )
+
+    info("*** Adding switches\n")
+
+    s1 = net.addSwitch(
+        "s1",
+        protocols="OpenFlow13"
+    )
+
+    s2 = net.addSwitch(
+        "s2",
+        protocols="OpenFlow13"
+    )
+
+    s3 = net.addSwitch(
+        "s3",
+        protocols="OpenFlow13"
+    )
+
+    s4 = net.addSwitch(
+        "s4",
+        protocols="OpenFlow13"
+    )
+
+    # ---------------------------------------------------------
+    # HOST LINKS FIRST
+    # ---------------------------------------------------------
+
+    net.addLink(
+        h1,
+        s1,
+        cls=TCLink,
+        bw=10
+    )
+
+    net.addLink(
+        h2,
+        s4,
+        cls=TCLink,
+        bw=10
+    )
+
+    # ---------------------------------------------------------
+    # UPPER PATH
+    # s1 -> s2 -> s4
+    # ---------------------------------------------------------
+
+    net.addLink(
+        s1,
+        s2,
+        cls=TCLink,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    net.addLink(
+        s2,
+        s4,
+        cls=TCLink,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    # ---------------------------------------------------------
+    # LOWER PATH
+    # s1 -> s3 -> s4
+    # ---------------------------------------------------------
+
+    net.addLink(
+        s1,
+        s3,
+        cls=TCLink,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    net.addLink(
+        s3,
+        s4,
+        cls=TCLink,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    # ---------------------------------------------------------
+    # BRAESS CANDIDATE LINK
+    # ---------------------------------------------------------
+
+    net.addLink(
+        s2,
+        s3,
+        cls=TCLink,
+        bw=10,
+        delay="1ms",
+        loss=0
+    )
+
+    info("*** Building network\n")
+
+    net.build()
+
+    c0.start()
+
+    for switch in [s1, s2, s3, s4]:
+        switch.start([c0])
+
+    info("\n")
+    info("=" * 60 + "\n")
+    info("MEDROUTE - STEP 23\n")
+    info("CONTROLLED BRAESS OFF/ON EXPERIMENT\n")
+    info("=" * 60 + "\n")
+
+    info("\nWaiting for Ryu discovery...\n")
+
+    time.sleep(8)
+
+    # =========================================================
+    # EXPERIMENT A
+    # Candidate link OFF
+    # =========================================================
+
+    info("\n")
+    info("PHASE A: BASELINE NETWORK\n")
+    info("------------------------------------------\n")
+
+    set_candidate_link(
+        s2,
+        s3,
+        False
+    )
+
+    show_candidate_state(
+        s2,
+        s3
+    )
+
+    # Give Ryu time to process topology change.
+    time.sleep(5)
+
+    run_ping_experiment(
+        h1,
+        h2,
+        "BASELINE RESULT - CANDIDATE LINK OFF"
+    )
+
+    # =========================================================
+    # EXPERIMENT B
+    # Candidate link ON
+    # =========================================================
+
+    info("\n")
+    info("PHASE B: CANDIDATE NETWORK\n")
+    info("------------------------------------------\n")
+
+    set_candidate_link(
+        s2,
+        s3,
+        True
+    )
+
+    show_candidate_state(
+        s2,
+        s3
+    )
+
+    # Give Ryu time to rediscover link.
+    time.sleep(5)
+
+    run_ping_experiment(
+        h1,
+        h2,
+        "CANDIDATE RESULT - CANDIDATE LINK ON"
+    )
+
+    info("\n")
+    info("=" * 60 + "\n")
+    info("STEP 23 EXPERIMENT FINISHED\n")
+    info("=" * 60 + "\n")
+
+    info(
+        "\nNOTE: Different ping results alone do NOT prove "
+        "Braess paradox.\n"
+    )
+
+    info(
+        "The next stage introduces controlled demand and "
+        "system-cost comparison.\n\n"
+    )
+
+    CLI(net)
+
+    net.stop()
+
+
+if __name__ == "__main__":
+
+    setLogLevel("info")
+
+    create_network()
+23.2 Syntax check
+
+Run:
+
+python3 -m py_compile topology/network_monitor.py
+
+No output = good.
+
+Then clean Mininet:
+
+sudo mn -c
+23.3 Start Ryu
+
+Terminal 1:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+ryu-manager --observe-links controller/medroute_controller.py
+
+Don't run the Step 20 standalone test this time.
+
+23.4 Run the experiment
+
+Terminal 2:
+
+cd /mnt/c/Users/subiw/medroute
+sudo python3 topology/network_monitor.py
+
+You should automatically get:
+
+PHASE A: BASELINE NETWORK
+Braess candidate link s2 <-> s3: OFF
+
+BASELINE RESULT - CANDIDATE LINK OFF
+...
+30 packets transmitted...
+
+followed by:
+
+PHASE B: CANDIDATE NETWORK
+Braess candidate link s2 <-> s3: ON
+
+CANDIDATE RESULT - CANDIDATE LINK ON
+...
+30 packets transmitted...
+
+No manual ping commands are necessary.
+
+One important thing to inspect in Ryu
+
+When the link goes OFF, ideally topology discovery should eventually remove:
+
+(2, 3)
+(3, 2)
+
+When it comes ON, Ryu should rediscover:
+
+(2, 3)
+(3, 2)
+
+If that doesn't happen reliably, don't modify anything yourself. Send me the Ryu output. We may need to add EventLinkDelete handling to the controller, because right now our Step 21 controller explicitly reacts to EventLinkAdd but not EventLinkDelete.
+
+That's exactly the sort of issue Step 23 is intended to expose.
+
+Also, don't judge Braess from something like:
+
+OFF  = 10% loss
+ON   = 20% loss
+
+yet. With probabilistic TCLink loss, a single 30-packet sample can vary substantially. Step 23 is validating controlled OFF/ON operation, not proving the paradox.
+
+Send me both BASELINE and CANDIDATE ping summaries and the Ryu topology messages around the OFF/ON transition. Then we'll determine whether Step 23 passes before changing anything else.
