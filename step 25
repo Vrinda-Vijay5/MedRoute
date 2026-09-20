@@ -1,3 +1,326 @@
+Perfect — that confirms it. Your topology/network_monitor.py is still the old Step 23 file. Step 25 has not been installed yet. Nothing else needs debugging.
+
+Replace the whole file now.
+
+cd /mnt/c/Users/subiw/medroute
+cp topology/network_monitor.py topology/network_monitor_step23_backup.py
+nano topology/network_monitor.py
+
+Delete everything in it and paste this complete Step 25 file:
+
+from mininet.net import Mininet
+from mininet.node import RemoteController, OVSSwitch
+from mininet.link import TCLink
+from mininet.log import setLogLevel, info
+from mininet.cli import CLI
+
+import time
+
+
+def create_network():
+
+    net = Mininet(
+        controller=None,
+        switch=OVSSwitch,
+        link=TCLink,
+        autoSetMacs=True,
+        build=False
+    )
+
+    info("*** Adding remote SDN controller\n")
+
+    c0 = net.addController(
+        "c0",
+        controller=RemoteController,
+        ip="127.0.0.1",
+        port=6653
+    )
+
+    # =========================================================
+    # HOSPITAL HOSTS
+    # =========================================================
+
+    info("*** Adding hospital hosts\n")
+
+    # Controlled experimental traffic classes.
+    # Dataset replay will later provide the actual healthcare data.
+    h1 = net.addHost("h1", ip="10.0.0.1/24")  # NORMAL
+    h2 = net.addHost("h2", ip="10.0.0.2/24")  # URGENT
+    h3 = net.addHost("h3", ip="10.0.0.3/24")  # CRITICAL
+
+    # Hospital monitoring/server destination
+    h4 = net.addHost("h4", ip="10.0.0.4/24")
+
+    # =========================================================
+    # SDN SWITCHES
+    # =========================================================
+
+    info("*** Adding OpenFlow switches\n")
+
+    s1 = net.addSwitch("s1", protocols="OpenFlow13")
+    s2 = net.addSwitch("s2", protocols="OpenFlow13")
+    s3 = net.addSwitch("s3", protocols="OpenFlow13")
+    s4 = net.addSwitch("s4", protocols="OpenFlow13")
+
+    # =========================================================
+    # HOST LINKS
+    # Keep these before inter-switch links.
+    # =========================================================
+
+    info("*** Adding host links\n")
+
+    # Two hospital sources enter through s1
+    net.addLink(
+        h1, s1,
+        cls=TCLink,
+        bw=10
+    )
+
+    net.addLink(
+        h2, s1,
+        cls=TCLink,
+        bw=10
+    )
+
+    # Critical source enters through s2
+    net.addLink(
+        h3, s2,
+        cls=TCLink,
+        bw=10
+    )
+
+    # Hospital server is attached to s4
+    net.addLink(
+        h4, s4,
+        cls=TCLink,
+        bw=10
+    )
+
+    # =========================================================
+    # UPPER ROUTE
+    #
+    # s1 ---- s2 ---- s4
+    # =========================================================
+
+    info("*** Adding upper path\n")
+
+    net.addLink(
+        s1, s2,
+        cls=TCLink,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    net.addLink(
+        s2, s4,
+        cls=TCLink,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    # =========================================================
+    # LOWER ROUTE
+    #
+    # s1 ---- s3 ---- s4
+    # =========================================================
+
+    info("*** Adding lower path\n")
+
+    net.addLink(
+        s1, s3,
+        cls=TCLink,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    net.addLink(
+        s3, s4,
+        cls=TCLink,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    # =========================================================
+    # BRAESS CANDIDATE LINK
+    #
+    #       s2
+    #      /  \
+    #    s1    s4
+    #      \  /
+    #       s3
+    #
+    # Candidate: s2 <----> s3
+    # =========================================================
+
+    info("*** Adding Braess candidate link\n")
+
+    net.addLink(
+        s2, s3,
+        cls=TCLink,
+        bw=10,
+        delay="1ms",
+        loss=0
+    )
+
+    # =========================================================
+    # START NETWORK
+    # =========================================================
+
+    info("*** Building network\n")
+
+    net.build()
+
+    c0.start()
+
+    for switch in [s1, s2, s3, s4]:
+        switch.start([c0])
+
+    info("\n")
+    info("=" * 65 + "\n")
+    info("MEDROUTE STEP 25 - MULTI-FLOW HOSPITAL SDN\n")
+    info("=" * 65 + "\n")
+
+    info("\nHospital traffic sources:\n")
+    info("  h1  10.0.0.1  NORMAL experimental source\n")
+    info("  h2  10.0.0.2  URGENT experimental source\n")
+    info("  h3  10.0.0.3  CRITICAL experimental source\n")
+    info("  h4  10.0.0.4  Hospital server\n")
+
+    info("\nNetwork paths:\n")
+    info("  Upper:     s1 -> s2 -> s4\n")
+    info("  Lower:     s1 -> s3 -> s4\n")
+    info("  Candidate: s2 <-> s3\n")
+
+    info("\nWaiting for Ryu topology discovery...\n")
+
+    time.sleep(8)
+
+    # =========================================================
+    # CONNECTIVITY DISCOVERY
+    # =========================================================
+
+    info("\n*** Initial connectivity/discovery test\n")
+
+    net.ping(
+        hosts=[h1, h2, h3, h4],
+        timeout="2"
+    )
+
+    info("\n")
+    info("=" * 65 + "\n")
+    info("STEP 25 TOPOLOGY READY\n")
+    info("=" * 65 + "\n")
+
+    info("\nEntering Mininet CLI\n\n")
+
+    CLI(net)
+
+    info("*** Stopping network\n")
+    net.stop()
+
+
+if __name__ == "__main__":
+    setLogLevel("info")
+    create_network()
+
+Save with Ctrl+O, Enter, then Ctrl+X.
+
+Verify before launching
+
+Run:
+
+python3 -m py_compile topology/network_monitor.py
+
+grep -n "MEDROUTE STEP" topology/network_monitor.py
+grep -n 'h3 = ' topology/network_monitor.py
+grep -n 'h4 = ' topology/network_monitor.py
+
+This time you must get matches resembling:
+
+MEDROUTE STEP 25 - MULTI-FLOW HOSPITAL SDN
+h3 = net.addHost("h3", ip="10.0.0.3/24")
+h4 = net.addHost("h4", ip="10.0.0.4/24")
+
+If py_compile gives no output, that's also correct.
+
+Then:
+
+sudo mn -c
+sudo python3 topology/network_monitor.py
+
+Keep your Ryu controller running in the other terminal.
+
+When it reaches:
+
+mininet>
+
+first run only:
+
+nodes
+
+It should show:
+
+c0 h1 h2 h3 h4 s1 s2 s3 s4
+
+Then run:
+
+h1 ping -c 5 10.0.0.4
+h2 ping -c 5 10.0.0.4
+h3 ping -c 5 10.0.0.4
+
+Stop there and send me the nodes output plus those three ping results.
+
+Don't start the three iperf flows yet. First we'll confirm the new topology and controller forwarding are correct; then we'll do the congestion part of Step 25 without creating another unnecessary step.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Step 25 has NOT run yet. ❌ The output makes the problem clear.
 
 Look at the beginning of what you ran:
