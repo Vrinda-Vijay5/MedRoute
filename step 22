@@ -1,0 +1,380 @@
+Yes. Step 21 is fine and COMPLETE. ✅
+
+Your output confirms topology discovery, live OpenFlow utilization monitoring, weighted route calculation, route changes based on network state, and actual OpenFlow flow installation. We don't need to change Step 21 now.
+
+Step 22 — Add the Braess Candidate Link
+
+For Step 22, we're doing only the topology foundation. We are not claiming Braess paradox yet.
+
+Current:
+
+        s2
+       /  \
+h1 -- s1   s4 -- h2
+       \  /
+        s3
+
+Step 22:
+
+        s2
+       / | \
+h1 -- s1 |  s4 -- h2
+       \ | /
+        s3
+
+The new link is:
+
+s2 <----> s3
+
+This is the link we'll later enable/disable to compare network behavior.
+
+Because this requires several changes, replace the whole topology file.
+
+22.1 Back up your current topology
+
+Stop Mininet and Ryu first.
+
+sudo mn -c
+
+Then:
+
+cd /mnt/c/Users/subiw/medroute
+cp topology/network_monitor.py topology/network_monitor_step21_backup.py
+
+Now replace topology/network_monitor.py with:
+
+from mininet.net import Mininet
+from mininet.node import RemoteController, OVSSwitch
+from mininet.link import TCLink
+from mininet.log import setLogLevel, info
+from mininet.cli import CLI
+
+import time
+
+
+def create_network():
+
+    net = Mininet(
+        controller=None,
+        switch=OVSSwitch,
+        link=TCLink,
+        autoSetMacs=True,
+        build=False
+    )
+
+    info("*** Adding remote SDN controller\n")
+
+    c0 = net.addController(
+        "c0",
+        controller=RemoteController,
+        ip="127.0.0.1",
+        port=6653
+    )
+
+    info("*** Adding hosts\n")
+
+    h1 = net.addHost(
+        "h1",
+        ip="10.0.0.1/24"
+    )
+
+    h2 = net.addHost(
+        "h2",
+        ip="10.0.0.2/24"
+    )
+
+    info("*** Adding OpenFlow switches\n")
+
+    s1 = net.addSwitch(
+        "s1",
+        protocols="OpenFlow13"
+    )
+
+    s2 = net.addSwitch(
+        "s2",
+        protocols="OpenFlow13"
+    )
+
+    s3 = net.addSwitch(
+        "s3",
+        protocols="OpenFlow13"
+    )
+
+    s4 = net.addSwitch(
+        "s4",
+        protocols="OpenFlow13"
+    )
+
+    # ---------------------------------------------------------
+    # HOST LINKS
+    #
+    # Add these FIRST so that:
+    #
+    # h1 <-> s1 uses s1-eth1
+    # h2 <-> s4 uses s4-eth1
+    # ---------------------------------------------------------
+
+    info("*** Adding host links\n")
+
+    net.addLink(
+        h1,
+        s1,
+        cls=TCLink,
+        bw=10
+    )
+
+    net.addLink(
+        h2,
+        s4,
+        cls=TCLink,
+        bw=10
+    )
+
+    # ---------------------------------------------------------
+    # ORIGINAL UPPER PATH
+    #
+    # s1 -> s2 -> s4
+    #
+    # Low delay but lossy.
+    # ---------------------------------------------------------
+
+    info("*** Adding upper path\n")
+
+    net.addLink(
+        s1,
+        s2,
+        cls=TCLink,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    net.addLink(
+        s2,
+        s4,
+        cls=TCLink,
+        bw=10,
+        delay="5ms",
+        loss=5
+    )
+
+    # ---------------------------------------------------------
+    # ORIGINAL LOWER PATH
+    #
+    # s1 -> s3 -> s4
+    #
+    # Higher delay but no configured loss.
+    # ---------------------------------------------------------
+
+    info("*** Adding lower path\n")
+
+    net.addLink(
+        s1,
+        s3,
+        cls=TCLink,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    net.addLink(
+        s3,
+        s4,
+        cls=TCLink,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    # ---------------------------------------------------------
+    # BRAESS CANDIDATE LINK
+    #
+    # This creates the additional s2 <-> s3 connection.
+    #
+    # IMPORTANT:
+    # Adding this link does NOT itself prove Braess paradox.
+    # Later experiments will compare the network with and
+    # without this link under comparable traffic demand.
+    # ---------------------------------------------------------
+
+    info("*** Adding Braess candidate link s2 <-> s3\n")
+
+    net.addLink(
+        s2,
+        s3,
+        cls=TCLink,
+        bw=10,
+        delay="1ms",
+        loss=0
+    )
+
+    info("*** Building network\n")
+
+    net.build()
+
+    info("*** Starting controller\n")
+    c0.start()
+
+    info("*** Starting switches\n")
+
+    for switch in [s1, s2, s3, s4]:
+        switch.start([c0])
+
+    info("\n")
+    info("==========================================\n")
+    info("MedRoute Step 22\n")
+    info("Braess Candidate-Link SDN Topology\n")
+    info("==========================================\n")
+    info("\n")
+
+    info("Original paths:\n")
+    info("  s1 -> s2 -> s4\n")
+    info("  s1 -> s3 -> s4\n")
+    info("\n")
+
+    info("Braess candidate link:\n")
+    info("  s2 <-> s3\n")
+    info("\n")
+
+    info("Waiting for Ryu topology discovery...\n")
+
+    time.sleep(8)
+
+    info("\n*** Testing host connectivity\n")
+
+    result = net.ping(
+        hosts=[h1, h2],
+        timeout="2"
+    )
+
+    info(
+        "*** Connectivity test packet loss: "
+        "{}%\n".format(result)
+    )
+
+    info("\n")
+    info("==========================================\n")
+    info("Entering Mininet CLI\n")
+    info("==========================================\n")
+
+    CLI(net)
+
+    info("*** Stopping network\n")
+
+    net.stop()
+
+
+if __name__ == "__main__":
+
+    setLogLevel("info")
+
+    create_network()
+22.2 Syntax test
+
+Run:
+
+cd /mnt/c/Users/subiw/medroute
+python3 -m py_compile topology/network_monitor.py
+
+Expected:
+
+(no output)
+
+If there's an error, stop there and send it to me.
+
+22.3 Start Ryu
+
+Terminal 1:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+ryu-manager --observe-links controller/medroute_controller.py
+
+Wait until Ryu is ready.
+
+22.4 Start the Step 22 topology
+
+Terminal 2:
+
+cd /mnt/c/Users/subiw/medroute
+sudo python3 topology/network_monitor.py
+
+After discovery, the Ryu controller should eventually show 10 directed switch edges, because there are five physical switch-to-switch links:
+
+1 -> 2
+2 -> 1
+
+1 -> 3
+3 -> 1
+
+2 -> 4
+4 -> 2
+
+3 -> 4
+4 -> 3
+
+2 -> 3
+3 -> 2
+
+The crucial new ones are:
+
+(2, 3)
+(3, 2)
+
+If those appear, the candidate link has been discovered successfully.
+
+22.5 Test connectivity
+
+At the Mininet prompt:
+
+mininet> h1 ping -c 10 h2
+
+Then:
+
+mininet> links
+
+You should see the five inter-switch links plus the two host links.
+
+Then check the OpenFlow topology:
+
+mininet> sh ovs-ofctl -O OpenFlow13 show s2
+
+and:
+
+mininet> sh ovs-ofctl -O OpenFlow13 show s3
+
+Both switches should have a port corresponding to their new s2-s3 connection.
+
+Finally:
+
+mininet> h1 traceroute -n 10.0.0.2
+
+Don't worry if traceroute isn't especially informative through the OpenFlow L2 topology. The important tests are controller discovery, connectivity, and the switch ports.
+
+What counts as Step 22 passing?
+
+We need these four things:
+
+✓ s2 <-> s3 physically exists in Mininet
+
+✓ Ryu discovers (2,3) and (3,2)
+
+✓ h1 can still communicate with h2
+
+✓ Controller continues receiving LINK UTIL measurements
+
+Don't expect a Braess result yet.
+
+The distinction is important:
+
+Step 22: build the network capable of a Braess experiment.
+
+Step 23: create controlled candidate-link OFF vs ON experiment conditions under comparable demand.
+
+Step 24: calculate and compare system costs.
+
+Step 25: detect a persistent Braess condition.
+
+Step 26: SDN mitigation/rerouting.
+
+So for now, do 22.1 → 22.5 in one go. Send me the Ryu topology line containing all the edges plus the h1 ping -c 10 h2 result. Then we'll determine whether Step 22 passes and move directly to Step 23.
