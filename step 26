@@ -1,0 +1,1599 @@
+Step 25: PASS ✅
+
+This is now enough evidence. The three simultaneous UDP flows actually ran and reached h4:
+
+h1 → h4: 3.15 Mbps offered, ~2.83 Mbps received, 10% loss, ~0.071 ms iperf jitter.
+h2 → h4: 3.15 Mbps offered, ~2.85 Mbps received, 9.6% loss, ~0.047 ms jitter.
+h3 → h4: 3.15 Mbps offered, with the server showing ~2.98 Mbps and 5.3% loss, ~0.046 ms jitter.
+During the load, h3 → h4 ping: 13/15 received, 13.33% loss, average RTT 10.801 ms, mdev 1.359 ms.
+
+So we have now demonstrated:
+
+Multiple hospital sources
+        ↓
+simultaneous competing traffic
+        ↓
+shared SDN infrastructure
+        ↓
+measurable packet loss / delay / jitter
+        ↓
+different experienced performance
+
+One minor thing: these commands at the end:
+
+h3 ping result
+h3 ping
+
+aren't tests—the first tries to resolve the hostname result, and the second has no destination. Ignore those errors. Your actual h3 ping immediately above already passed.
+
+Also, pgrep was executed after the 40-second clients had essentially completed, which is why its output is mixed with iperf's final reports. That's fine; the server output itself confirms all three connections existed simultaneously.
+
+One thing still matters
+
+The earlier Ryu log showed that the controller itself started correctly , but it was still treating traffic as:
+
+class=NORMAL
+
+and its rules were essentially destination-IP based.
+
+That is exactly what we fix next.
+
+Step 26
+
+We're going to make this a single substantial controller upgrade, not five little steps.
+
+It will introduce:
+
+FLOW IDENTITY
+(src IP, dst IP, protocol, UDP/TCP port)
+            ↓
+CRITICALITY
+NORMAL / URGENT / CRITICAL
+            ↓
+CURRENT NETWORK STATE
+delay + jitter + loss + utilization
+            ↓
+UTILIZATION HISTORY
+            ↓
+DETERMINISTIC CONGESTION PREDICTION
+            ↓
+AVAILABLE PATH STRATEGIES
+            ↓
+GAME-THEORETIC COST EVALUATION
+            ↓
+NASH-STABILITY CHECK
+            ↓
+SYSTEM-COST COMPARISON
+            ↓
+SDN ROUTE SELECTION
+            ↓
+FLOW-SPECIFIC OPENFLOW RULES
+
+For the controlled experiment we'll map:
+
+h1 → NORMAL
+h2 → URGENT
+h3 → CRITICAL
+
+Later the dataset will determine those classes dynamically instead of the host address.
+
+And importantly, the next controller must allow, for example:
+
+h1 → h4   NORMAL    → path A
+h2 → h4   URGENT    → path B
+h3 → h4   CRITICAL  → path C
+
+even though all three have the same destination 10.0.0.4.
+
+That gives us actual independently routed flows—the prerequisite for meaningful game-theoretic interaction and our upcoming Braess counterfactual.
+
+Step 25 is finished. Don't run anything else for it.
+
+For Step 26, because medroute_controller.py will require substantial changes, I won't make you perform dozens of tiny insertions. I'll give you the full modified controller file in one go, followed by one concise validation procedure.
+
+next
+Step 26 — Flow-specific + predictive + game-theoretic SDN
+
+Step 25 is complete. For Step 26, we need to modify medroute_controller.py substantially. I checked the controller version you previously provided: it currently uses one global current_criticality, calculates paths from that global class, and installs destination-only IPv4 rules.
+
+We are going to replace that with per-flow SDN decisions while preserving your existing topology discovery and OpenFlow utilization monitoring.
+
+One important correction before the code: at this stage, "game theoretic" will mean that each active flow is a player, available paths are strategies, and path cost includes the congestion imposed by the currently assigned competing flows. We will calculate whether a selected assignment is a unilateral-deviation equilibrium. We will not fake a Nash claim simply because shortest-path routing ran.
+
+1. Replace the controller
+
+Stop Ryu with Ctrl+C. Exit Mininet and clean:
+
+sudo mn -c
+cd /mnt/c/Users/subiw/medroute
+cp controller/medroute_controller.py controller/medroute_controller_step25_backup.py
+nano controller/medroute_controller.py
+
+Replace the entire file with:
+
+import time
+from collections import defaultdict, deque
+
+import networkx as nx
+
+from ryu.base import app_manager
+from ryu.controller import ofp_event
+from ryu.controller.handler import (
+    CONFIG_DISPATCHER,
+    MAIN_DISPATCHER,
+    set_ev_cls
+)
+from ryu.ofproto import ofproto_v1_3
+from ryu.lib import hub
+from ryu.lib.packet import (
+    packet,
+    ethernet,
+    ether_types,
+    arp,
+    ipv4,
+    udp,
+    tcp
+)
+from ryu.topology import event
+from ryu.topology.api import get_switch, get_link
+
+
+class MedRouteController(app_manager.RyuApp):
+
+    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+
+    # =========================================================
+    # CONFIGURATION
+    # =========================================================
+
+    MONITOR_INTERVAL = 5
+    LINK_CAPACITY_MBPS = 10.0
+
+    MAX_DELAY_MS = 100.0
+    MAX_JITTER_MS = 50.0
+    MAX_LOSS_PERCENT = 100.0
+
+    # Deterministic prediction
+    HISTORY_LENGTH = 5
+    PREDICTION_ALPHA = 0.60
+
+    # Controlled experimental traffic demand.
+    # Later this can be measured/derived dynamically.
+    FLOW_DEMAND_MBPS = {
+        "NORMAL": 3.0,
+        "URGENT": 3.0,
+        "CRITICAL": 3.0,
+    }
+
+    # Controlled Step-26 mapping.
+    # Dataset classification will replace this later.
+    HOST_CRITICALITY = {
+        "10.0.0.1": "NORMAL",
+        "10.0.0.2": "URGENT",
+        "10.0.0.3": "CRITICAL",
+    }
+
+    QOS_WEIGHTS = {
+        "NORMAL": {
+            "delay": 0.20,
+            "jitter": 0.10,
+            "loss": 0.20,
+            "utilization": 0.50,
+        },
+        "URGENT": {
+            "delay": 0.30,
+            "jitter": 0.20,
+            "loss": 0.30,
+            "utilization": 0.20,
+        },
+        "CRITICAL": {
+            "delay": 0.40,
+            "jitter": 0.25,
+            "loss": 0.30,
+            "utilization": 0.05,
+        },
+    }
+
+    PRIORITY_FACTOR = {
+        "NORMAL": 1.0,
+        "URGENT": 2.0,
+        "CRITICAL": 4.0,
+    }
+
+    def __init__(self, *args, **kwargs):
+        super(MedRouteController, self).__init__(*args, **kwargs)
+
+        self.net = nx.DiGraph()
+
+        self.datapaths = {}
+        self.port_map = {}
+
+        self.previous_port_stats = {}
+        self.port_rates = {}
+
+        self.host_switch = {}
+        self.host_mac = {}
+        self.host_port = {}
+
+        # Per-link state.
+        # utilization is LIVE from OpenFlow.
+        # delay/jitter/loss remain controlled experimental values.
+        self.link_metrics = {}
+
+        # Link utilization history for deterministic prediction.
+        self.utilization_history = defaultdict(
+            lambda: deque(maxlen=self.HISTORY_LENGTH)
+        )
+
+        self.predicted_utilization = {}
+
+        # Active flow -> chosen path
+        self.flow_paths = {}
+
+        # Active flow -> criticality
+        self.flow_criticality = {}
+
+        self.monitor_thread = hub.spawn(self.monitor_ports)
+
+        self.logger.info(
+            "MedRoute Step 26 controller started | "
+            "flow-specific + predictive + game-theoretic SDN"
+        )
+
+    # =========================================================
+    # SWITCH CONNECTION
+    # =========================================================
+
+    @set_ev_cls(
+        ofp_event.EventOFPSwitchFeatures,
+        CONFIG_DISPATCHER
+    )
+    def switch_features_handler(self, ev):
+
+        datapath = ev.msg.datapath
+        dpid = datapath.id
+
+        self.datapaths[dpid] = datapath
+        self.net.add_node(dpid)
+
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        match = parser.OFPMatch()
+
+        actions = [
+            parser.OFPActionOutput(
+                ofproto.OFPP_CONTROLLER,
+                ofproto.OFPCML_NO_BUFFER
+            )
+        ]
+
+        instructions = [
+            parser.OFPInstructionActions(
+                ofproto.OFPIT_APPLY_ACTIONS,
+                actions
+            )
+        ]
+
+        mod = parser.OFPFlowMod(
+            datapath=datapath,
+            priority=0,
+            match=match,
+            instructions=instructions
+        )
+
+        datapath.send_msg(mod)
+
+        self.logger.info(
+            "Switch connected: %s",
+            dpid
+        )
+
+    # =========================================================
+    # TOPOLOGY
+    # =========================================================
+
+    @set_ev_cls(event.EventSwitchEnter)
+    def switch_enter_handler(self, ev):
+        self.update_topology()
+
+    @set_ev_cls(event.EventLinkAdd)
+    def link_add_handler(self, ev):
+        self.update_topology()
+
+    @set_ev_cls(event.EventLinkDelete)
+    def link_delete_handler(self, ev):
+
+        self.logger.info(
+            "Link removed: %s -> %s",
+            ev.link.src.dpid,
+            ev.link.dst.dpid
+        )
+
+        self.update_topology()
+
+    def update_topology(self):
+
+        switches = get_switch(self, None)
+        links = get_link(self, None)
+
+        old_metrics = self.link_metrics.copy()
+
+        self.net.clear()
+        self.port_map.clear()
+
+        for sw in switches:
+            self.net.add_node(sw.dp.id)
+
+        new_metrics = {}
+
+        for link in links:
+
+            src = link.src.dpid
+            dst = link.dst.dpid
+
+            self.port_map[(src, dst)] = (
+                link.src.port_no
+            )
+
+            metrics = old_metrics.get(
+                (src, dst),
+                {
+                    "delay_ms": 0.0,
+                    "jitter_ms": 0.0,
+                    "loss_percent": 0.0,
+                    "utilization": 0.0,
+                }
+            )
+
+            new_metrics[(src, dst)] = metrics
+
+            self.net.add_edge(
+                src,
+                dst,
+                weight=1.0
+            )
+
+        self.link_metrics = new_metrics
+
+        self.logger.info(
+            "Topology: %s",
+            sorted(self.net.edges())
+        )
+
+    # =========================================================
+    # PORT MONITORING
+    # =========================================================
+
+    def monitor_ports(self):
+
+        while True:
+
+            for datapath in list(
+                self.datapaths.values()
+            ):
+                self.request_port_stats(datapath)
+
+            hub.sleep(self.MONITOR_INTERVAL)
+
+    def request_port_stats(self, datapath):
+
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        request = parser.OFPPortStatsRequest(
+            datapath,
+            0,
+            ofproto.OFPP_ANY
+        )
+
+        datapath.send_msg(request)
+
+    @set_ev_cls(
+        ofp_event.EventOFPPortStatsReply,
+        MAIN_DISPATCHER
+    )
+    def port_stats_reply_handler(self, ev):
+
+        datapath = ev.msg.datapath
+        dpid = datapath.id
+        now = time.time()
+
+        for stat in ev.msg.body:
+
+            port_no = stat.port_no
+
+            if port_no > 0xffffff00:
+                continue
+
+            key = (dpid, port_no)
+
+            previous = self.previous_port_stats.get(
+                key
+            )
+
+            if previous is not None:
+
+                byte_difference = (
+                    stat.tx_bytes
+                    - previous["tx_bytes"]
+                )
+
+                time_difference = (
+                    now - previous["time"]
+                )
+
+                if byte_difference < 0:
+                    byte_difference = 0
+
+                if time_difference > 0:
+
+                    mbps = (
+                        byte_difference
+                        * 8.0
+                        / time_difference
+                        / 1_000_000.0
+                    )
+
+                    self.port_rates[key] = mbps
+
+                    self.update_link_utilization(
+                        dpid,
+                        port_no,
+                        mbps
+                    )
+
+            self.previous_port_stats[key] = {
+                "tx_bytes": stat.tx_bytes,
+                "time": now
+            }
+
+    # =========================================================
+    # UTILIZATION + PREDICTION
+    # =========================================================
+
+    def update_link_utilization(
+        self,
+        dpid,
+        port_no,
+        rate_mbps
+    ):
+
+        utilization = self.clamp(
+            rate_mbps
+            / self.LINK_CAPACITY_MBPS
+        )
+
+        for link, out_port in self.port_map.items():
+
+            src, dst = link
+
+            if (
+                src == dpid
+                and out_port == port_no
+            ):
+
+                metrics = self.link_metrics.setdefault(
+                    link,
+                    {
+                        "delay_ms": 0.0,
+                        "jitter_ms": 0.0,
+                        "loss_percent": 0.0,
+                        "utilization": 0.0,
+                    }
+                )
+
+                metrics["utilization"] = utilization
+
+                history = self.utilization_history[
+                    link
+                ]
+
+                history.append(utilization)
+
+                prediction = (
+                    self.predict_utilization(link)
+                )
+
+                self.predicted_utilization[
+                    link
+                ] = prediction
+
+                self.logger.info(
+                    "LINK STATE | s%s->s%s | "
+                    "rate=%.3f Mbps | "
+                    "util=%.1f%% | "
+                    "pred=%.1f%%",
+                    src,
+                    dst,
+                    rate_mbps,
+                    utilization * 100.0,
+                    prediction * 100.0
+                )
+
+                break
+
+    def predict_utilization(self, link):
+
+        history = list(
+            self.utilization_history[link]
+        )
+
+        if not history:
+            return 0.0
+
+        if len(history) == 1:
+            return history[-1]
+
+        current = history[-1]
+        previous = history[-2]
+
+        trend = current - previous
+
+        prediction = (
+            current
+            + self.PREDICTION_ALPHA * trend
+        )
+
+        return self.clamp(prediction)
+
+    # =========================================================
+    # METRIC NORMALIZATION
+    # =========================================================
+
+    @staticmethod
+    def clamp(value):
+        return max(
+            0.0,
+            min(float(value), 1.0)
+        )
+
+    def normalized_link_metrics(
+        self,
+        link,
+        projected_extra_util=0.0
+    ):
+
+        metrics = self.link_metrics.get(
+            link,
+            {
+                "delay_ms": 0.0,
+                "jitter_ms": 0.0,
+                "loss_percent": 0.0,
+                "utilization": 0.0,
+            }
+        )
+
+        predicted = self.predicted_utilization.get(
+            link,
+            metrics["utilization"]
+        )
+
+        projected_utilization = self.clamp(
+            predicted + projected_extra_util
+        )
+
+        return {
+            "delay": self.clamp(
+                metrics["delay_ms"]
+                / self.MAX_DELAY_MS
+            ),
+            "jitter": self.clamp(
+                metrics["jitter_ms"]
+                / self.MAX_JITTER_MS
+            ),
+            "loss": self.clamp(
+                metrics["loss_percent"]
+                / self.MAX_LOSS_PERCENT
+            ),
+            "utilization": projected_utilization,
+        }
+
+    # =========================================================
+    # CONTROLLED QoS INTERFACE
+    # =========================================================
+
+    def set_link_qos(
+        self,
+        src,
+        dst,
+        delay_ms=None,
+        jitter_ms=None,
+        loss_percent=None
+    ):
+
+        if (src, dst) not in self.link_metrics:
+            return
+
+        metrics = self.link_metrics[
+            (src, dst)
+        ]
+
+        if delay_ms is not None:
+            metrics["delay_ms"] = max(
+                0.0,
+                float(delay_ms)
+            )
+
+        if jitter_ms is not None:
+            metrics["jitter_ms"] = max(
+                0.0,
+                float(jitter_ms)
+            )
+
+        if loss_percent is not None:
+            metrics["loss_percent"] = max(
+                0.0,
+                min(
+                    float(loss_percent),
+                    100.0
+                )
+            )
+
+    # =========================================================
+    # CRITICALITY
+    # =========================================================
+
+    def get_criticality(self, src_ip):
+
+        return self.HOST_CRITICALITY.get(
+            src_ip,
+            "NORMAL"
+        )
+
+    # =========================================================
+    # FLOW IDENTIFICATION
+    # =========================================================
+
+    def get_flow_identity(
+        self,
+        pkt,
+        ipv4_pkt
+    ):
+
+        src_ip = ipv4_pkt.src
+        dst_ip = ipv4_pkt.dst
+        protocol = ipv4_pkt.proto
+
+        src_port = 0
+        dst_port = 0
+
+        udp_pkt = pkt.get_protocol(udp.udp)
+
+        if udp_pkt:
+            src_port = udp_pkt.src_port
+            dst_port = udp_pkt.dst_port
+
+        tcp_pkt = pkt.get_protocol(tcp.tcp)
+
+        if tcp_pkt:
+            src_port = tcp_pkt.src_port
+            dst_port = tcp_pkt.dst_port
+
+        return (
+            src_ip,
+            dst_ip,
+            protocol,
+            src_port,
+            dst_port
+        )
+
+    # =========================================================
+    # GAME-THEORETIC PATH MODEL
+    # =========================================================
+
+    def get_candidate_paths(
+        self,
+        src_switch,
+        dst_switch
+    ):
+
+        try:
+            paths = list(
+                nx.all_simple_paths(
+                    self.net,
+                    src_switch,
+                    dst_switch,
+                    cutoff=4
+                )
+            )
+
+        except (
+            nx.NetworkXNoPath,
+            nx.NodeNotFound
+        ):
+            return []
+
+        # Keep experiment bounded and deterministic.
+        paths.sort(
+            key=lambda path: (
+                len(path),
+                tuple(path)
+            )
+        )
+
+        return paths[:6]
+
+    def path_links(self, path):
+
+        return [
+            (path[i], path[i + 1])
+            for i in range(len(path) - 1)
+        ]
+
+    def competing_flow_load(
+        self,
+        link,
+        excluded_flow=None
+    ):
+
+        total_mbps = 0.0
+
+        for flow_id, path in self.flow_paths.items():
+
+            if flow_id == excluded_flow:
+                continue
+
+            if link not in self.path_links(path):
+                continue
+
+            criticality = self.flow_criticality.get(
+                flow_id,
+                "NORMAL"
+            )
+
+            total_mbps += self.FLOW_DEMAND_MBPS.get(
+                criticality,
+                3.0
+            )
+
+        return total_mbps
+
+    def evaluate_path_cost(
+        self,
+        path,
+        criticality,
+        flow_id=None
+    ):
+
+        weights = self.QOS_WEIGHTS[
+            criticality
+        ]
+
+        own_demand = self.FLOW_DEMAND_MBPS.get(
+            criticality,
+            3.0
+        )
+
+        total_cost = 0.0
+
+        for link in self.path_links(path):
+
+            competing_mbps = (
+                self.competing_flow_load(
+                    link,
+                    excluded_flow=flow_id
+                )
+            )
+
+            projected_extra = (
+                competing_mbps
+                + own_demand
+            ) / self.LINK_CAPACITY_MBPS
+
+            normalized = (
+                self.normalized_link_metrics(
+                    link,
+                    projected_extra_util=projected_extra
+                )
+            )
+
+            link_cost = (
+                weights["delay"]
+                * normalized["delay"]
+                +
+                weights["jitter"]
+                * normalized["jitter"]
+                +
+                weights["loss"]
+                * normalized["loss"]
+                +
+                weights["utilization"]
+                * normalized["utilization"]
+            )
+
+            total_cost += max(
+                link_cost,
+                0.000001
+            )
+
+        return total_cost
+
+    def select_game_theoretic_path(
+        self,
+        flow_id,
+        src_switch,
+        dst_switch,
+        criticality
+    ):
+
+        paths = self.get_candidate_paths(
+            src_switch,
+            dst_switch
+        )
+
+        if not paths:
+            raise nx.NetworkXNoPath
+
+        evaluated = []
+
+        for path in paths:
+
+            cost = self.evaluate_path_cost(
+                path,
+                criticality,
+                flow_id
+            )
+
+            evaluated.append(
+                (cost, path)
+            )
+
+        evaluated.sort(
+            key=lambda item: (
+                item[0],
+                len(item[1]),
+                tuple(item[1])
+            )
+        )
+
+        best_cost, best_path = evaluated[0]
+
+        self.flow_paths[flow_id] = best_path
+        self.flow_criticality[
+            flow_id
+        ] = criticality
+
+        self.logger.info(
+            "GAME ROUTE | class=%s | "
+            "flow=%s | path=%s | cost=%.4f",
+            criticality,
+            flow_id,
+            best_path,
+            best_cost
+        )
+
+        return best_path
+
+    # =========================================================
+    # NASH / SYSTEM COST
+    # =========================================================
+
+    def check_nash_state(self):
+
+        if not self.flow_paths:
+            return True
+
+        epsilon = 0.0001
+        stable = True
+
+        for flow_id, current_path in list(
+            self.flow_paths.items()
+        ):
+
+            src_switch = current_path[0]
+            dst_switch = current_path[-1]
+
+            criticality = self.flow_criticality.get(
+                flow_id,
+                "NORMAL"
+            )
+
+            current_cost = self.evaluate_path_cost(
+                current_path,
+                criticality,
+                flow_id
+            )
+
+            candidates = self.get_candidate_paths(
+                src_switch,
+                dst_switch
+            )
+
+            best_alternative = current_cost
+
+            for candidate in candidates:
+
+                candidate_cost = (
+                    self.evaluate_path_cost(
+                        candidate,
+                        criticality,
+                        flow_id
+                    )
+                )
+
+                best_alternative = min(
+                    best_alternative,
+                    candidate_cost
+                )
+
+            if (
+                best_alternative
+                + epsilon
+                < current_cost
+            ):
+                stable = False
+                break
+
+        self.logger.info(
+            "NASH CHECK | stable=%s | active_flows=%s",
+            stable,
+            len(self.flow_paths)
+        )
+
+        return stable
+
+    def calculate_system_cost(self):
+
+        total = 0.0
+
+        for flow_id, path in self.flow_paths.items():
+
+            criticality = self.flow_criticality.get(
+                flow_id,
+                "NORMAL"
+            )
+
+            individual_cost = (
+                self.evaluate_path_cost(
+                    path,
+                    criticality,
+                    flow_id
+                )
+            )
+
+            total += (
+                self.PRIORITY_FACTOR[
+                    criticality
+                ]
+                * individual_cost
+            )
+
+        self.logger.info(
+            "SYSTEM COST | %.4f",
+            total
+        )
+
+        return total
+
+    # =========================================================
+    # PACKET IN
+    # =========================================================
+
+    @set_ev_cls(
+        ofp_event.EventOFPPacketIn,
+        MAIN_DISPATCHER
+    )
+    def packet_in_handler(self, ev):
+
+        msg = ev.msg
+        datapath = msg.datapath
+
+        dpid = datapath.id
+        in_port = msg.match["in_port"]
+
+        pkt = packet.Packet(msg.data)
+
+        eth = pkt.get_protocol(
+            ethernet.ethernet
+        )
+
+        if eth is None:
+            return
+
+        if (
+            eth.ethertype
+            == ether_types.ETH_TYPE_LLDP
+        ):
+            return
+
+        # -----------------------------------------------------
+        # ARP
+        # -----------------------------------------------------
+
+        arp_pkt = pkt.get_protocol(
+            arp.arp
+        )
+
+        if arp_pkt:
+
+            src_ip = arp_pkt.src_ip
+            dst_ip = arp_pkt.dst_ip
+
+            if self.is_host_port(
+                dpid,
+                in_port
+            ):
+                self.learn_host(
+                    src_ip,
+                    eth.src,
+                    dpid,
+                    in_port
+                )
+
+            if dst_ip not in self.host_switch:
+                self.flood_packet(msg)
+                return
+
+            src_switch = self.host_switch.get(
+                src_ip
+            )
+
+            dst_switch = self.host_switch[
+                dst_ip
+            ]
+
+            if src_switch is None:
+                return
+
+            try:
+
+                path = nx.shortest_path(
+                    self.net,
+                    src_switch,
+                    dst_switch
+                )
+
+                self.forward_packet_along_path(
+                    msg,
+                    path,
+                    dst_switch,
+                    dst_ip
+                )
+
+            except (
+                nx.NetworkXNoPath,
+                nx.NodeNotFound
+            ):
+                pass
+
+            return
+
+        # -----------------------------------------------------
+        # IPv4
+        # -----------------------------------------------------
+
+        ipv4_pkt = pkt.get_protocol(
+            ipv4.ipv4
+        )
+
+        if ipv4_pkt is None:
+            return
+
+        src_ip = ipv4_pkt.src
+        dst_ip = ipv4_pkt.dst
+
+        if self.is_host_port(
+            dpid,
+            in_port
+        ):
+            self.learn_host(
+                src_ip,
+                eth.src,
+                dpid,
+                in_port
+            )
+
+        if dst_ip not in self.host_switch:
+            return
+
+        src_switch = self.host_switch.get(
+            src_ip
+        )
+
+        dst_switch = self.host_switch.get(
+            dst_ip
+        )
+
+        if (
+            src_switch is None
+            or dst_switch is None
+        ):
+            return
+
+        flow_id = self.get_flow_identity(
+            pkt,
+            ipv4_pkt
+        )
+
+        criticality = self.get_criticality(
+            src_ip
+        )
+
+        try:
+
+            path = self.select_game_theoretic_path(
+                flow_id,
+                src_switch,
+                dst_switch,
+                criticality
+            )
+
+            self.delete_specific_flow(
+                flow_id
+            )
+
+            self.install_flow_path(
+                path,
+                flow_id
+            )
+
+            self.forward_packet_along_path(
+                msg,
+                path,
+                dst_switch,
+                dst_ip
+            )
+
+            self.check_nash_state()
+            self.calculate_system_cost()
+
+        except (
+            nx.NetworkXNoPath,
+            nx.NodeNotFound
+        ):
+
+            self.logger.warning(
+                "No path for flow %s",
+                flow_id
+            )
+
+    # =========================================================
+    # HOST LEARNING
+    # =========================================================
+
+    def learn_host(
+        self,
+        ip,
+        mac,
+        switch,
+        port
+    ):
+
+        self.host_switch[ip] = switch
+        self.host_mac[ip] = mac
+        self.host_port[ip] = port
+
+    def is_host_port(
+        self,
+        dpid,
+        port
+    ):
+
+        interswitch_ports = {
+            switch_port
+            for (src, _), switch_port
+            in self.port_map.items()
+            if src == dpid
+        }
+
+        return port not in interswitch_ports
+
+    # =========================================================
+    # FLOW MATCHING
+    # =========================================================
+
+    def build_flow_match(
+        self,
+        parser,
+        flow_id
+    ):
+
+        (
+            src_ip,
+            dst_ip,
+            protocol,
+            src_port,
+            dst_port
+        ) = flow_id
+
+        fields = {
+            "eth_type":
+                ether_types.ETH_TYPE_IP,
+            "ipv4_src": src_ip,
+            "ipv4_dst": dst_ip,
+            "ip_proto": protocol,
+        }
+
+        if protocol == 17:
+            fields["udp_src"] = src_port
+            fields["udp_dst"] = dst_port
+
+        elif protocol == 6:
+            fields["tcp_src"] = src_port
+            fields["tcp_dst"] = dst_port
+
+        return parser.OFPMatch(**fields)
+
+    def delete_specific_flow(
+        self,
+        flow_id
+    ):
+
+        for datapath in self.datapaths.values():
+
+            parser = (
+                datapath.ofproto_parser
+            )
+
+            ofproto = datapath.ofproto
+
+            match = self.build_flow_match(
+                parser,
+                flow_id
+            )
+
+            mod = parser.OFPFlowMod(
+                datapath=datapath,
+                command=ofproto.OFPFC_DELETE,
+                out_port=ofproto.OFPP_ANY,
+                out_group=ofproto.OFPG_ANY,
+                priority=200,
+                match=match
+            )
+
+            datapath.send_msg(mod)
+
+    # =========================================================
+    # INSTALL FLOW-SPECIFIC PATH
+    # =========================================================
+
+    def install_flow_path(
+        self,
+        path,
+        flow_id
+    ):
+
+        dst_ip = flow_id[1]
+
+        for index in range(
+            len(path) - 1
+        ):
+
+            current_switch = path[index]
+            next_switch = path[index + 1]
+
+            out_port = self.port_map.get(
+                (
+                    current_switch,
+                    next_switch
+                )
+            )
+
+            datapath = self.datapaths.get(
+                current_switch
+            )
+
+            if (
+                out_port is None
+                or datapath is None
+            ):
+                continue
+
+            self.install_specific_flow(
+                datapath,
+                flow_id,
+                out_port
+            )
+
+        if path:
+
+            destination_switch = path[-1]
+
+            host_port = self.host_port.get(
+                dst_ip
+            )
+
+            datapath = self.datapaths.get(
+                destination_switch
+            )
+
+            if (
+                host_port is not None
+                and datapath is not None
+            ):
+
+                self.install_specific_flow(
+                    datapath,
+                    flow_id,
+                    host_port
+                )
+
+    def install_specific_flow(
+        self,
+        datapath,
+        flow_id,
+        out_port
+    ):
+
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        match = self.build_flow_match(
+            parser,
+            flow_id
+        )
+
+        actions = [
+            parser.OFPActionOutput(
+                out_port
+            )
+        ]
+
+        instructions = [
+            parser.OFPInstructionActions(
+                ofproto.OFPIT_APPLY_ACTIONS,
+                actions
+            )
+        ]
+
+        mod = parser.OFPFlowMod(
+            datapath=datapath,
+            priority=200,
+            idle_timeout=20,
+            hard_timeout=0,
+            match=match,
+            instructions=instructions
+        )
+
+        datapath.send_msg(mod)
+
+        self.logger.info(
+            "FLOW INSTALL | s%s | "
+            "%s -> %s | proto=%s | "
+            "sport=%s dport=%s | out=%s",
+            datapath.id,
+            flow_id[0],
+            flow_id[1],
+            flow_id[2],
+            flow_id[3],
+            flow_id[4],
+            out_port
+        )
+
+    # =========================================================
+    # PACKET OUTPUT
+    # =========================================================
+
+    def forward_packet_along_path(
+        self,
+        msg,
+        path,
+        dst_switch,
+        dst_ip
+    ):
+
+        current_switch = (
+            msg.datapath.id
+        )
+
+        parser = (
+            msg.datapath.ofproto_parser
+        )
+
+        ofproto = msg.datapath.ofproto
+
+        if current_switch == dst_switch:
+
+            out_port = self.host_port.get(
+                dst_ip
+            )
+
+        else:
+
+            try:
+                index = path.index(
+                    current_switch
+                )
+
+            except ValueError:
+                return
+
+            if index >= len(path) - 1:
+                return
+
+            next_switch = path[
+                index + 1
+            ]
+
+            out_port = self.port_map.get(
+                (
+                    current_switch,
+                    next_switch
+                )
+            )
+
+        if out_port is None:
+            return
+
+        actions = [
+            parser.OFPActionOutput(
+                out_port
+            )
+        ]
+
+        out = parser.OFPPacketOut(
+            datapath=msg.datapath,
+            buffer_id=ofproto.OFP_NO_BUFFER,
+            in_port=msg.match["in_port"],
+            actions=actions,
+            data=msg.data
+        )
+
+        msg.datapath.send_msg(out)
+
+    # =========================================================
+    # FLOOD
+    # =========================================================
+
+    def flood_packet(self, msg):
+
+        datapath = msg.datapath
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        actions = [
+            parser.OFPActionOutput(
+                ofproto.OFPP_FLOOD
+            )
+        ]
+
+        out = parser.OFPPacketOut(
+            datapath=datapath,
+            buffer_id=ofproto.OFP_NO_BUFFER,
+            in_port=msg.match["in_port"],
+            actions=actions,
+            data=msg.data
+        )
+
+        datapath.send_msg(out)
+2. Check it before running
+
+Save and exit Nano, then:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+python -m py_compile controller/medroute_controller.py
+
+No output = syntax PASS.
+
+Then clean Mininet:
+
+sudo mn -c
+
+Terminal 1:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+ryu-manager --observe-links controller/medroute_controller.py
+
+You should see:
+
+MedRoute Step 26 controller started | flow-specific + predictive + game-theoretic SDN
+
+Terminal 2:
+
+cd /mnt/c/Users/subiw/medroute
+sudo python3 topology/network_monitor.py
+
+Wait for:
+
+mininet>
+3. Learn all hosts first
+
+Run:
+
+pingall
+
+Some packet loss is acceptable because of the deliberately lossy upper links.
+
+Then:
+
+h1 ping -c 3 10.0.0.4
+h2 ping -c 3 10.0.0.4
+h3 ping -c 3 10.0.0.4
+
+Now Ryu should no longer report all three sources as NORMAL.
+
+For the three sources it should identify:
+
+10.0.0.1 → NORMAL
+10.0.0.2 → URGENT
+10.0.0.3 → CRITICAL
+4. Test the actual flow-specific routing
+
+Clear iperf:
+
+h1 pkill iperf
+h2 pkill iperf
+h3 pkill iperf
+h4 pkill iperf
+
+Start the server:
+
+h4 iperf -s -u &
+
+Start the three players:
+
+h1 iperf -c 10.0.0.4 -u -b 3M -t 40 &
+h2 iperf -c 10.0.0.4 -u -b 3M -t 40 &
+h3 iperf -c 10.0.0.4 -u -b 3M -t 40 &
+
+Now watch Ryu.
+
+The important new output is:
+
+GAME ROUTE | class=NORMAL ...
+GAME ROUTE | class=URGENT ...
+GAME ROUTE | class=CRITICAL ...
+
+plus:
+
+NASH CHECK | stable=...
+SYSTEM COST | ...
+
+and after enough monitoring intervals:
+
+LINK STATE | ... util=... | pred=...
+
+The prediction is deliberately not AI/ML. It is:
+
+$$ \hat U(t+1)=U(t)+0.6[U(t)-U(t-1)] $$
+
+with the result clamped to [0,1].
+
+5. Verify OpenFlow is genuinely flow-specific
+
+While iperf is active:
+
+sh ovs-ofctl -O OpenFlow13 dump-flows s1
+sh ovs-ofctl -O OpenFlow13 dump-flows s2
+sh ovs-ofctl -O OpenFlow13 dump-flows s3
+sh ovs-ofctl -O OpenFlow13 dump-flows s4
+
+Previously we had rules essentially like:
+
+nw_dst=10.0.0.4
+
+Now look for priority 200 rules containing combinations such as:
+
+nw_src=10.0.0.1,nw_dst=10.0.0.4
+nw_src=10.0.0.2,nw_dst=10.0.0.4
+nw_src=10.0.0.3,nw_dst=10.0.0.4
+
+and UDP transport-port matching.
+
+That is the crucial Step-26 improvement: three flows going to the same hospital server can now receive independent SDN routes.
+
+What counts as PASS
+
+Don't send hundreds of lines this time. Send only the section containing:
+
+GAME ROUTE | class=NORMAL
+GAME ROUTE | class=URGENT
+GAME ROUTE | class=CRITICAL
+
+NASH CHECK
+SYSTEM COST
+
+LINK STATE
+
+plus about 10–20 relevant lines from:
+
+ovs-ofctl ... dump-flows s1
+
+If those are correct, Step 26 is complete.
+
+Then Step 27 can be the big centerpiece rather than another intermediate step:
+
+counterfactual Braess detection + prediction + equilibrium/system-optimum comparison + automatic SDN mitigation, all together.
