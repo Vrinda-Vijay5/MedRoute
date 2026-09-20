@@ -37,3 +37,49 @@ Paste the output here.
 Since this will require more than two modifications, I'll give you the entire replacement file for Step 21 rather than telling you to edit individual lines.
 
 And as agreed, we are not adding live wearable input at Step 21. When we reach the healthcare-input integration point where dataset replay versus live wearable data needs to be chosen, I'll stop and ask you first.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Good — I have the current controller up to the beginning of PACKET IN, but the paste stops there. I shouldn't replace the whole controller yet, because Step 21 touches packet handling, path calculation, ARP, IPv4 flow installation, and I don't want to accidentally remove working logic from the remainder of your file.
+
+Please run:
+
+cd /mnt/c/Users/subiw/medroute
+sed -n '260,520p' controller/medroute_controller.py
+
+and paste the output.
+
+If that prints nothing or only a few lines, that's fine—send whatever appears.
+
+Then I'll give you one complete medroute_controller.py for Step 21 that integrates:
+
+Port statistics
+      ↓
+Utilization
+      ↓
+Delay + Jitter + Loss + Utilization
+      ↓
+Criticality-specific QoS weights
+      ↓
+Dynamic edge cost
+      ↓
+NetworkX shortest-cost path
+      ↓
+Ryu
+      ↓
+OpenFlow rules
+
+We'll also remove the old simplistic LinkWeightCalculator dependency where appropriate, because Step 21 should use the four-metric QoS cost from Step 17 rather than only LOW/MEDIUM/HIGH utilization weights.
+
+And we will not touch Braess yet. Step 21 gets the real controller integration working first; Step 22 is where we introduce the controlled Braess topology.
