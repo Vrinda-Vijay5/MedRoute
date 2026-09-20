@@ -1,85 +1,1034 @@
-Step 21 — Integrate Criticality-Aware Multi-QoS Routing into the Real Ryu Controller
+Perfect. I now have the relevant controller logic. We can proceed with Step 21.
 
-This is where we move beyond the standalone tests from Steps 17–20.
+One important correction before the code: Step 21 should integrate criticality-aware multi-QoS routing into the real controller, but your controller currently only has a real live source for utilization via OpenFlow port statistics. We should not pretend delay, jitter, and loss are already live per-link measurements. For this step, we'll integrate the cost architecture correctly and keep those three metrics as controlled/configurable per-link values until the Braess experiment gives us a rigorous measurement/experimental mechanism.
 
-The goal is:
+Step 21 — Real Criticality-Aware Multi-QoS Ryu Controller
 
-OpenFlow / OVS
-      ↓
-Network measurements
-      ↓
-Delay + Jitter + Loss + Utilization
-      ↓
-QoS normalization
-      ↓
-Patient criticality
-NORMAL / URGENT / CRITICAL
-      ↓
-Criticality-specific link costs
-      ↓
-NetworkX path calculation
-      ↓
-Ryu controller
-      ↓
-OpenFlow route installation
+Replace your entire:
 
-So Step 21 connects the pieces we've already built into the actual controller.
+controller/medroute_controller.py
 
-Before I give you the full modified medroute_controller.py, I need one thing because we're continuing on the original setup and I don't want to accidentally overwrite a newer controller version:
+with this:
 
-Run:
+import time
+
+import networkx as nx
+
+from ryu.base import app_manager
+from ryu.controller import ofp_event
+from ryu.controller.handler import (
+    CONFIG_DISPATCHER,
+    MAIN_DISPATCHER,
+    set_ev_cls
+)
+from ryu.ofproto import ofproto_v1_3
+from ryu.lib import hub
+from ryu.lib.packet import packet, ethernet, ether_types, arp, ipv4
+from ryu.topology import event
+from ryu.topology.api import get_switch, get_link
+
+
+class MedRouteController(app_manager.RyuApp):
+
+    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+
+    # ---------------------------------------------------------
+    # CONFIGURATION
+    # ---------------------------------------------------------
+
+    MONITOR_INTERVAL = 5
+
+    # Mininet inter-switch link capacity
+    LINK_CAPACITY_MBPS = 10.0
+
+    # Experimental normalization bounds
+    MAX_DELAY_MS = 100.0
+    MAX_JITTER_MS = 50.0
+    MAX_LOSS_PERCENT = 100.0
+
+    # Criticality-specific experimental QoS policies
+    QOS_WEIGHTS = {
+        "NORMAL": {
+            "delay": 0.20,
+            "jitter": 0.10,
+            "loss": 0.20,
+            "utilization": 0.50,
+        },
+        "URGENT": {
+            "delay": 0.30,
+            "jitter": 0.20,
+            "loss": 0.30,
+            "utilization": 0.20,
+        },
+        "CRITICAL": {
+            "delay": 0.40,
+            "jitter": 0.25,
+            "loss": 0.30,
+            "utilization": 0.05,
+        },
+    }
+
+    def __init__(self, *args, **kwargs):
+        super(MedRouteController, self).__init__(*args, **kwargs)
+
+        # Directed network graph
+        self.net = nx.DiGraph()
+
+        # Connected OpenFlow switches
+        self.datapaths = {}
+
+        # (source switch, destination switch) -> output port
+        self.port_map = {}
+
+        # OpenFlow port statistics
+        self.previous_port_stats = {}
+        self.port_rates = {}
+
+        # Host information
+        self.host_switch = {}
+        self.host_mac = {}
+        self.host_port = {}
+
+        # Current healthcare traffic class.
+        # Step 21 uses NORMAL by default.
+        # Dataset/wearable input will later update this value.
+        self.current_criticality = "NORMAL"
+
+        # Per-directed-link QoS state.
+        #
+        # IMPORTANT:
+        # utilization is obtained dynamically from OpenFlow statistics.
+        #
+        # delay/jitter/loss are currently controlled experimental
+        # parameters, NOT live per-link measurements.
+        self.link_metrics = {}
+
+        self.monitor_thread = hub.spawn(self.monitor_ports)
+
+        self.logger.info(
+            "MedRoute controller started | criticality=%s",
+            self.current_criticality
+        )
+
+    # ---------------------------------------------------------
+    # SWITCH CONNECTION
+    # ---------------------------------------------------------
+
+    @set_ev_cls(
+        ofp_event.EventOFPSwitchFeatures,
+        CONFIG_DISPATCHER
+    )
+    def switch_features_handler(self, ev):
+
+        datapath = ev.msg.datapath
+        dpid = datapath.id
+
+        self.datapaths[dpid] = datapath
+        self.net.add_node(dpid)
+
+        self.logger.info("Switch connected: %s", dpid)
+
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        match = parser.OFPMatch()
+
+        actions = [
+            parser.OFPActionOutput(
+                ofproto.OFPP_CONTROLLER,
+                ofproto.OFPCML_NO_BUFFER
+            )
+        ]
+
+        instructions = [
+            parser.OFPInstructionActions(
+                ofproto.OFPIT_APPLY_ACTIONS,
+                actions
+            )
+        ]
+
+        mod = parser.OFPFlowMod(
+            datapath=datapath,
+            priority=0,
+            match=match,
+            instructions=instructions
+        )
+
+        datapath.send_msg(mod)
+
+    # ---------------------------------------------------------
+    # TOPOLOGY DISCOVERY
+    # ---------------------------------------------------------
+
+    @set_ev_cls(event.EventSwitchEnter)
+    def switch_enter_handler(self, ev):
+        self.update_topology()
+
+    @set_ev_cls(event.EventLinkAdd)
+    def link_add_handler(self, ev):
+        self.update_topology()
+
+    def update_topology(self):
+
+        switches = get_switch(self, None)
+        links = get_link(self, None)
+
+        old_metrics = self.link_metrics.copy()
+
+        self.net.clear()
+        self.port_map.clear()
+
+        for sw in switches:
+            self.net.add_node(sw.dp.id)
+
+        for link in links:
+
+            src = link.src.dpid
+            dst = link.dst.dpid
+            port = link.src.port_no
+
+            self.port_map[(src, dst)] = port
+
+            # Preserve previous metrics if link already existed.
+            metrics = old_metrics.get(
+                (src, dst),
+                {
+                    "delay_ms": 0.0,
+                    "jitter_ms": 0.0,
+                    "loss_percent": 0.0,
+                    "utilization": 0.0,
+                }
+            )
+
+            self.link_metrics[(src, dst)] = metrics
+
+            self.net.add_edge(
+                src,
+                dst,
+                weight=1.0
+            )
+
+        # Remove metrics belonging to links that no longer exist.
+        valid_links = set(self.port_map.keys())
+
+        self.link_metrics = {
+            link: metrics
+            for link, metrics in self.link_metrics.items()
+            if link in valid_links
+        }
+
+        self.update_all_link_costs()
+
+        self.logger.info(
+            "Topology: %s",
+            list(self.net.edges())
+        )
+
+    # ---------------------------------------------------------
+    # PORT MONITORING
+    # ---------------------------------------------------------
+
+    def monitor_ports(self):
+
+        while True:
+
+            for datapath in list(self.datapaths.values()):
+                self.request_port_stats(datapath)
+
+            hub.sleep(self.MONITOR_INTERVAL)
+
+    def request_port_stats(self, datapath):
+
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        request = parser.OFPPortStatsRequest(
+            datapath,
+            0,
+            ofproto.OFPP_ANY
+        )
+
+        datapath.send_msg(request)
+
+    @set_ev_cls(
+        ofp_event.EventOFPPortStatsReply,
+        MAIN_DISPATCHER
+    )
+    def port_stats_reply_handler(self, ev):
+
+        datapath = ev.msg.datapath
+        dpid = datapath.id
+
+        current_time = time.time()
+
+        for stat in ev.msg.body:
+
+            port_no = stat.port_no
+
+            if port_no > 0xffffff00:
+                continue
+
+            # Use TX bytes for directed outgoing-link load.
+            total_tx_bytes = stat.tx_bytes
+
+            key = (dpid, port_no)
+
+            previous = self.previous_port_stats.get(key)
+
+            if previous is not None:
+
+                byte_difference = (
+                    total_tx_bytes - previous["tx_bytes"]
+                )
+
+                time_difference = (
+                    current_time - previous["time"]
+                )
+
+                # Protect against switch counter reset.
+                if byte_difference < 0:
+                    byte_difference = 0
+
+                if time_difference > 0:
+
+                    mbps = (
+                        byte_difference
+                        * 8.0
+                        / time_difference
+                        / 1_000_000.0
+                    )
+
+                    self.port_rates[key] = mbps
+
+                    self.update_link_utilization(
+                        dpid,
+                        port_no,
+                        mbps
+                    )
+
+            self.previous_port_stats[key] = {
+                "tx_bytes": total_tx_bytes,
+                "time": current_time
+            }
+
+        self.update_all_link_costs()
+
+    # ---------------------------------------------------------
+    # UTILIZATION
+    # ---------------------------------------------------------
+
+    def update_link_utilization(
+        self,
+        dpid,
+        port_no,
+        rate_mbps
+    ):
+
+        utilization = (
+            rate_mbps / self.LINK_CAPACITY_MBPS
+        )
+
+        utilization = max(
+            0.0,
+            min(utilization, 1.0)
+        )
+
+        # Find directed link using this outgoing port.
+        for (src, dst), out_port in self.port_map.items():
+
+            if src == dpid and out_port == port_no:
+
+                metrics = self.link_metrics.setdefault(
+                    (src, dst),
+                    {
+                        "delay_ms": 0.0,
+                        "jitter_ms": 0.0,
+                        "loss_percent": 0.0,
+                        "utilization": 0.0,
+                    }
+                )
+
+                metrics["utilization"] = utilization
+
+                self.logger.info(
+                    "LINK UTIL | s%s->s%s | "
+                    "rate=%.4f Mbps | util=%.2f%%",
+                    src,
+                    dst,
+                    rate_mbps,
+                    utilization * 100.0
+                )
+
+                break
+
+    # ---------------------------------------------------------
+    # NORMALIZATION
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def clamp(value):
+        return max(0.0, min(float(value), 1.0))
+
+    def normalize_metrics(self, metrics):
+
+        delay = self.clamp(
+            metrics["delay_ms"]
+            / self.MAX_DELAY_MS
+        )
+
+        jitter = self.clamp(
+            metrics["jitter_ms"]
+            / self.MAX_JITTER_MS
+        )
+
+        loss = self.clamp(
+            metrics["loss_percent"]
+            / self.MAX_LOSS_PERCENT
+        )
+
+        utilization = self.clamp(
+            metrics["utilization"]
+        )
+
+        return {
+            "delay": delay,
+            "jitter": jitter,
+            "loss": loss,
+            "utilization": utilization,
+        }
+
+    # ---------------------------------------------------------
+    # MULTI-QOS COST
+    # ---------------------------------------------------------
+
+    def calculate_link_cost(
+        self,
+        metrics,
+        criticality=None
+    ):
+
+        if criticality is None:
+            criticality = self.current_criticality
+
+        if criticality not in self.QOS_WEIGHTS:
+            criticality = "NORMAL"
+
+        weights = self.QOS_WEIGHTS[criticality]
+        normalized = self.normalize_metrics(metrics)
+
+        cost = (
+            weights["delay"]
+            * normalized["delay"]
+            +
+            weights["jitter"]
+            * normalized["jitter"]
+            +
+            weights["loss"]
+            * normalized["loss"]
+            +
+            weights["utilization"]
+            * normalized["utilization"]
+        )
+
+        # Tiny positive value prevents all-zero edges while preserving
+        # relative QoS ordering.
+        return max(cost, 0.000001)
+
+    def update_all_link_costs(self):
+
+        for (src, dst), metrics in self.link_metrics.items():
+
+            if not self.net.has_edge(src, dst):
+                continue
+
+            cost = self.calculate_link_cost(
+                metrics,
+                self.current_criticality
+            )
+
+            self.net[src][dst]["weight"] = cost
+
+    # ---------------------------------------------------------
+    # CONTROLLED LINK METRIC INTERFACE
+    # ---------------------------------------------------------
+
+    def set_link_qos(
+        self,
+        src,
+        dst,
+        delay_ms=None,
+        jitter_ms=None,
+        loss_percent=None
+    ):
+        """
+        Controlled experiment interface.
+
+        delay/jitter/loss supplied here are NOT claimed to be live
+        measurements. Step 22+ can connect this interface to the
+        controlled Braess experiment/measurement subsystem.
+        """
+
+        if (src, dst) not in self.link_metrics:
+            return
+
+        metrics = self.link_metrics[(src, dst)]
+
+        if delay_ms is not None:
+            metrics["delay_ms"] = max(
+                0.0,
+                float(delay_ms)
+            )
+
+        if jitter_ms is not None:
+            metrics["jitter_ms"] = max(
+                0.0,
+                float(jitter_ms)
+            )
+
+        if loss_percent is not None:
+            metrics["loss_percent"] = max(
+                0.0,
+                min(float(loss_percent), 100.0)
+            )
+
+        self.update_all_link_costs()
+
+    # ---------------------------------------------------------
+    # CRITICALITY
+    # ---------------------------------------------------------
+
+    def set_criticality(self, criticality):
+
+        criticality = criticality.upper()
+
+        if criticality not in self.QOS_WEIGHTS:
+            raise ValueError(
+                "Unknown criticality: {}".format(
+                    criticality
+                )
+            )
+
+        if criticality == self.current_criticality:
+            return
+
+        old = self.current_criticality
+        self.current_criticality = criticality
+
+        self.update_all_link_costs()
+
+        self.logger.info(
+            "CRITICALITY changed: %s -> %s",
+            old,
+            criticality
+        )
+
+    # ---------------------------------------------------------
+    # PATH CALCULATION
+    # ---------------------------------------------------------
+
+    def calculate_path(
+        self,
+        src_switch,
+        dst_switch
+    ):
+
+        self.update_all_link_costs()
+
+        path = nx.shortest_path(
+            self.net,
+            src_switch,
+            dst_switch,
+            weight="weight"
+        )
+
+        cost = nx.path_weight(
+            self.net,
+            path,
+            weight="weight"
+        )
+
+        self.logger.info(
+            "ROUTE | class=%s | path=%s | cost=%.6f",
+            self.current_criticality,
+            path,
+            cost
+        )
+
+        return path
+
+    # ---------------------------------------------------------
+    # PACKET IN
+    # ---------------------------------------------------------
+
+    @set_ev_cls(
+        ofp_event.EventOFPPacketIn,
+        MAIN_DISPATCHER
+    )
+    def packet_in_handler(self, ev):
+
+        msg = ev.msg
+        datapath = msg.datapath
+        dpid = datapath.id
+        in_port = msg.match["in_port"]
+
+        pkt = packet.Packet(msg.data)
+        eth = pkt.get_protocol(ethernet.ethernet)
+
+        if eth is None:
+            return
+
+        # Ignore LLDP.
+        if eth.ethertype == ether_types.ETH_TYPE_LLDP:
+            return
+
+        src_mac = eth.src
+
+        # -----------------------------------------------------
+        # ARP
+        # -----------------------------------------------------
+
+        arp_pkt = pkt.get_protocol(arp.arp)
+
+        if arp_pkt:
+
+            src_ip = arp_pkt.src_ip
+            dst_ip = arp_pkt.dst_ip
+
+            if self.is_host_port(dpid, in_port):
+
+                self.host_switch[src_ip] = dpid
+                self.host_mac[src_ip] = src_mac
+                self.host_port[src_ip] = in_port
+
+            if dst_ip in self.host_switch:
+
+                src_switch = self.host_switch.get(src_ip)
+                dst_switch = self.host_switch[dst_ip]
+
+                if src_switch is None:
+                    return
+
+                try:
+
+                    path = self.calculate_path(
+                        src_switch,
+                        dst_switch
+                    )
+
+                    self.forward_packet_along_path(
+                        msg,
+                        path,
+                        dst_switch,
+                        dst_ip
+                    )
+
+                except (
+                    nx.NetworkXNoPath,
+                    nx.NodeNotFound
+                ):
+
+                    self.logger.warning(
+                        "No ARP path: %s -> %s",
+                        src_switch,
+                        dst_switch
+                    )
+
+            else:
+                self.flood_packet(msg)
+
+            return
+
+        # -----------------------------------------------------
+        # IPv4
+        # -----------------------------------------------------
+
+        ipv4_pkt = pkt.get_protocol(ipv4.ipv4)
+
+        if ipv4_pkt:
+
+            src_ip = ipv4_pkt.src
+            dst_ip = ipv4_pkt.dst
+
+            if self.is_host_port(dpid, in_port):
+
+                self.host_switch[src_ip] = dpid
+                self.host_mac[src_ip] = src_mac
+                self.host_port[src_ip] = in_port
+
+            if dst_ip not in self.host_switch:
+
+                self.logger.info(
+                    "IPv4 destination unknown: %s",
+                    dst_ip
+                )
+
+                return
+
+            src_switch = self.host_switch.get(src_ip)
+            dst_switch = self.host_switch[dst_ip]
+
+            if src_switch is None:
+                return
+
+            try:
+
+                path = self.calculate_path(
+                    src_switch,
+                    dst_switch
+                )
+
+                # Remove stale destination flows before installing
+                # the newly selected route.
+                self.delete_ipv4_destination_flows(dst_ip)
+
+                self.install_path(
+                    path,
+                    dst_ip
+                )
+
+                self.forward_packet_along_path(
+                    msg,
+                    path,
+                    dst_switch,
+                    dst_ip
+                )
+
+            except (
+                nx.NetworkXNoPath,
+                nx.NodeNotFound
+            ):
+
+                self.logger.warning(
+                    "No IPv4 path: %s -> %s",
+                    src_switch,
+                    dst_switch
+                )
+
+    # ---------------------------------------------------------
+    # HOST PORT DETECTION
+    # ---------------------------------------------------------
+
+    def is_host_port(self, dpid, port):
+
+        switch_ports = {
+            switch_port
+            for (src, _), switch_port
+            in self.port_map.items()
+            if src == dpid
+        }
+
+        return port not in switch_ports
+
+    # ---------------------------------------------------------
+    # FLOOD
+    # ---------------------------------------------------------
+
+    def flood_packet(self, msg):
+
+        datapath = msg.datapath
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        actions = [
+            parser.OFPActionOutput(
+                ofproto.OFPP_FLOOD
+            )
+        ]
+
+        out = parser.OFPPacketOut(
+            datapath=datapath,
+            buffer_id=ofproto.OFP_NO_BUFFER,
+            in_port=msg.match["in_port"],
+            actions=actions,
+            data=msg.data
+        )
+
+        datapath.send_msg(out)
+
+    # ---------------------------------------------------------
+    # DELETE OLD ROUTING FLOWS
+    # ---------------------------------------------------------
+
+    def delete_ipv4_destination_flows(
+        self,
+        dst_ip
+    ):
+
+        for datapath in self.datapaths.values():
+
+            parser = datapath.ofproto_parser
+            ofproto = datapath.ofproto
+
+            match = parser.OFPMatch(
+                eth_type=ether_types.ETH_TYPE_IP,
+                ipv4_dst=dst_ip
+            )
+
+            mod = parser.OFPFlowMod(
+                datapath=datapath,
+                command=ofproto.OFPFC_DELETE,
+                out_port=ofproto.OFPP_ANY,
+                out_group=ofproto.OFPG_ANY,
+                priority=100,
+                match=match
+            )
+
+            datapath.send_msg(mod)
+
+    # ---------------------------------------------------------
+    # INSTALL PATH
+    # ---------------------------------------------------------
+
+    def install_path(
+        self,
+        path,
+        dst_ip
+    ):
+
+        for index in range(len(path) - 1):
+
+            current_switch = path[index]
+            next_switch = path[index + 1]
+
+            out_port = self.port_map.get(
+                (current_switch, next_switch)
+            )
+
+            datapath = self.datapaths.get(
+                current_switch
+            )
+
+            if out_port is None or datapath is None:
+                continue
+
+            self.install_ipv4_flow(
+                datapath,
+                dst_ip,
+                out_port
+            )
+
+        # Destination switch -> host
+        if path:
+
+            destination_switch = path[-1]
+
+            host_port = self.host_port.get(
+                dst_ip
+            )
+
+            datapath = self.datapaths.get(
+                destination_switch
+            )
+
+            if (
+                host_port is not None
+                and datapath is not None
+            ):
+
+                self.install_ipv4_flow(
+                    datapath,
+                    dst_ip,
+                    host_port
+                )
+
+    def install_ipv4_flow(
+        self,
+        datapath,
+        dst_ip,
+        out_port
+    ):
+
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        match = parser.OFPMatch(
+            eth_type=ether_types.ETH_TYPE_IP,
+            ipv4_dst=dst_ip
+        )
+
+        actions = [
+            parser.OFPActionOutput(
+                out_port
+            )
+        ]
+
+        instructions = [
+            parser.OFPInstructionActions(
+                ofproto.OFPIT_APPLY_ACTIONS,
+                actions
+            )
+        ]
+
+        mod = parser.OFPFlowMod(
+            datapath=datapath,
+            priority=100,
+            idle_timeout=15,
+            hard_timeout=0,
+            match=match,
+            instructions=instructions
+        )
+
+        datapath.send_msg(mod)
+
+        self.logger.info(
+            "FLOW | switch=%s dst=%s out_port=%s",
+            datapath.id,
+            dst_ip,
+            out_port
+        )
+
+    # ---------------------------------------------------------
+    # FORWARD CURRENT PACKET
+    # ---------------------------------------------------------
+
+    def forward_packet_along_path(
+        self,
+        msg,
+        path,
+        dst_switch,
+        dst_ip
+    ):
+
+        current_switch = msg.datapath.id
+
+        parser = msg.datapath.ofproto_parser
+        ofproto = msg.datapath.ofproto
+
+        if current_switch == dst_switch:
+
+            out_port = self.host_port.get(
+                dst_ip
+            )
+
+        else:
+
+            try:
+                index = path.index(current_switch)
+
+            except ValueError:
+                return
+
+            if index >= len(path) - 1:
+                return
+
+            next_switch = path[index + 1]
+
+            out_port = self.port_map.get(
+                (current_switch, next_switch)
+            )
+
+        if out_port is None:
+            return
+
+        actions = [
+            parser.OFPActionOutput(
+                out_port
+            )
+        ]
+
+        out = parser.OFPPacketOut(
+            datapath=msg.datapath,
+            buffer_id=ofproto.OFP_NO_BUFFER,
+            in_port=msg.match["in_port"],
+            actions=actions,
+            data=msg.data
+        )
+
+        msg.datapath.send_msg(out)
+What changed in Step 21
+
+Your old controller essentially did:
+
+NetworkX edge weight = 1
+        ↓
+shortest hop-count path
+
+Now it does:
+
+                 OpenFlow TX counters
+                         ↓
+                  traffic rate Mbps
+                         ↓
+                    utilization
+                         │
+                         ▼
+delay ───────┐
+jitter ──────┤
+loss ────────┼──→ normalization
+utilization ─┘
+                         ↓
+              criticality weights
+                         ↓
+                dynamic edge cost
+                         ↓
+             NetworkX weighted path
+                         ↓
+                 OpenFlow route
+
+Also notice I changed the utilization calculation from:
+
+rx_bytes + tx_bytes
+
+to outgoing tx_bytes.
+
+That's deliberate. Our graph is directional:
+
+s1 → s2
+
+so the load associated with that directed edge should be based on traffic transmitted through the corresponding outgoing port. This avoids counting RX+TX together as though they were one directional flow.
+
+Test Step 21
+
+First syntax-check it:
 
 cd /mnt/c/Users/subiw/medroute
-sed -n '1,260p' controller/medroute_controller.py
+source ~/ryu-env/bin/activate
 
-Paste the output here.
+python -m py_compile controller/medroute_controller.py
 
-Since this will require more than two modifications, I'll give you the entire replacement file for Step 21 rather than telling you to edit individual lines.
+Expected: no output.
 
-And as agreed, we are not adding live wearable input at Step 21. When we reach the healthcare-input integration point where dataset replay versus live wearable data needs to be chosen, I'll stop and ask you first.
+Then start Ryu:
 
+ryu-manager --observe-links controller/medroute_controller.py
 
-
-
-
-
-
-
-
-
-
-
-
-
-Good — I have the current controller up to the beginning of PACKET IN, but the paste stops there. I shouldn't replace the whole controller yet, because Step 21 touches packet handling, path calculation, ARP, IPv4 flow installation, and I don't want to accidentally remove working logic from the remainder of your file.
-
-Please run:
+In another WSL terminal, run your existing topology:
 
 cd /mnt/c/Users/subiw/medroute
-sed -n '260,520p' controller/medroute_controller.py
+sudo python3 topology/network_monitor.py
 
-and paste the output.
+Once Mininet opens:
 
-If that prints nothing or only a few lines, that's fine—send whatever appears.
+h1 ping -c 5 h2
 
-Then I'll give you one complete medroute_controller.py for Step 21 that integrates:
+We want:
 
-Port statistics
-      ↓
-Utilization
-      ↓
-Delay + Jitter + Loss + Utilization
-      ↓
-Criticality-specific QoS weights
-      ↓
-Dynamic edge cost
-      ↓
-NetworkX shortest-cost path
-      ↓
-Ryu
-      ↓
-OpenFlow rules
+0% packet loss
 
-We'll also remove the old simplistic LinkWeightCalculator dependency where appropriate, because Step 21 should use the four-metric QoS cost from Step 17 rather than only LOW/MEDIUM/HIGH utilization weights.
+and the Ryu terminal should show lines resembling:
 
-And we will not touch Braess yet. Step 21 gets the real controller integration working first; Step 22 is where we introduce the controlled Braess topology.
+LINK UTIL | s1->s2 | rate=... Mbps | util=...%
+ROUTE | class=NORMAL | path=[1, 2, 4] | cost=...
+FLOW | switch=1 dst=10.0.0.2 out_port=...
+
+Don't worry if it selects [1,3,4] instead when costs are equal/nearly equal.
+
+Important limitation at this exact point
+
+Step 21 is not yet the final four-live-metric system.
+
+Right now:
+
+Metric	Step 21 source
+Utilization	Measured dynamically from OpenFlow TX counters
+Delay	Controlled/configurable
+Jitter	Controlled/configurable
+Packet loss	Controlled/configurable
+Criticality	Defaults to NORMAL; interface ready
+Routing	Actual Ryu/OpenFlow dynamic weighted routing
+
+That's intentional. It prevents us from falsely claiming end-to-end ping measurements are individual-link measurements.
+
+Run the syntax check and then h1 ping -c 5 h2. Send me the Ryu output around LINK UTIL, ROUTE, and FLOW plus the ping result.
+
+Once Step 21 passes, Step 22 is the Braess topology and controlled congestion-dependent experiment, which is where the centerpiece of the project begins.
