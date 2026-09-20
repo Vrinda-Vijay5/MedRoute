@@ -1,0 +1,39 @@
+Step 21 — Integrate Criticality-Aware Multi-QoS Routing into the Real Ryu Controller
+
+This is where we move beyond the standalone tests from Steps 17–20.
+
+The goal is:
+
+OpenFlow / OVS
+      ↓
+Network measurements
+      ↓
+Delay + Jitter + Loss + Utilization
+      ↓
+QoS normalization
+      ↓
+Patient criticality
+NORMAL / URGENT / CRITICAL
+      ↓
+Criticality-specific link costs
+      ↓
+NetworkX path calculation
+      ↓
+Ryu controller
+      ↓
+OpenFlow route installation
+
+So Step 21 connects the pieces we've already built into the actual controller.
+
+Before I give you the full modified medroute_controller.py, I need one thing because we're continuing on the original setup and I don't want to accidentally overwrite a newer controller version:
+
+Run:
+
+cd /mnt/c/Users/subiw/medroute
+sed -n '1,260p' controller/medroute_controller.py
+
+Paste the output here.
+
+Since this will require more than two modifications, I'll give you the entire replacement file for Step 21 rather than telling you to edit individual lines.
+
+And as agreed, we are not adding live wearable input at Step 21. When we reach the healthcare-input integration point where dataset replay versus live wearable data needs to be chosen, I'll stop and ask you first.
