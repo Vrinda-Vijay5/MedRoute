@@ -1,3 +1,62 @@
+Step 25 has NOT run yet. ❌ The output makes the problem clear.
+
+Look at the beginning of what you ran:
+
+*** Adding hosts
+*** Adding switches
+...
+MEDROUTE - STEP 23
+CONTROLLED BRAESS OFF/ON EXPERIMENT
+
+and:
+
+*** Configuring hosts
+h1 h2
+
+There are only h1 and h2. That's why:
+
+h3 ping ...
+*** Unknown command: h3 ...
+
+And 10.0.0.4 doesn't exist in this running Mininet network, which explains the 100% loss.
+
+So nothing is wrong with h3 or the controller. You simply launched the old Step 23 network_monitor.py, not the Step 25 topology.
+
+Do this now
+
+Exit:
+
+mininet> exit
+
+Clean:
+
+sudo mn -c
+
+Now check what is actually saved:
+
+cd /mnt/c/Users/subiw/medroute
+grep -n "MEDROUTE STEP" topology/network_monitor.py
+grep -n "h3 = " topology/network_monitor.py
+grep -n "h4 = " topology/network_monitor.py
+
+For the Step 25 file, you should see something containing:
+
+MEDROUTE STEP 25 - MULTI-FLOW HOSPITAL SDN
+
+and definitions for:
+
+h3 = net.addHost("h3", ip="10.0.0.3/24")
+h4 = net.addHost("h4", ip="10.0.0.4/24")
+
+If those grep commands do not show them, then the Step 25 code was not actually saved into topology/network_monitor.py.
+
+Don't run any more tests yet. Send me the output of those three grep commands. If Step 25 wasn't saved, I'll give you the complete Step 25 file again in one block so we fix it once rather than debugging a topology that isn't running.
+
+
+
+
+
+
 Step 25 — Multi-flow hospital topology + flow-specific SDN foundation
 
 Step 24 is complete. Now we need to fix the biggest structural limitation in the current prototype: one h1→h2 flow is not enough for meaningful game-theoretic/Braess analysis.
