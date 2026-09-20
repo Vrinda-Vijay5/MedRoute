@@ -1,0 +1,126 @@
+Step 23 is sufficiently validated to move on. Step 23 = COMPLETE ✅
+
+Now we need to be careful with Step 24, because this is where the actual Braess experiment starts. The OFF/ON pings from Step 23 were only topology-control validation; they were not evidence of Braess.
+
+Step 24 — Controlled congestion + system-cost experiment
+
+For Braess, we need congestion-dependent network cost. A quiet network cannot demonstrate the phenomenon properly.
+
+For this step we'll generate repeatable traffic with iperf, while measuring the foreground healthcare path with ping. We will compare the same offered load with:
+
+A: candidate s2↔s3 OFF
+B: candidate s2↔s3 ON
+
+We are not yet automatically declaring Braess. We're building the measurement experiment first.
+
+24.1 First check iperf
+
+You're currently at:
+
+mininet>
+
+Run:
+
+h1 which iperf
+
+If you get something like:
+
+/usr/bin/iperf
+
+continue below.
+
+If it prints nothing, stop there and tell me. Don't install/change anything yet.
+
+24.2 Why we need more than the previous ping
+
+Right now the topology has only:
+
+h1 ---------------- h2
+
+If we simply send one flow from h1 to h2, all traffic with the same IPv4 destination tends to follow the destination-based OpenFlow route installed by our controller.
+
+That isn't a strong Braess experiment.
+
+So Step 24 will introduce background demand so link utilization becomes meaningful.
+
+For now, we can test whether the existing topology produces measurable congestion before making the larger multi-flow topology change.
+
+At your current Mininet prompt run:
+
+h2 iperf -s &
+
+You should see the server start.
+
+Then run:
+
+h1 iperf -c 10.0.0.2 -t 20
+
+You should get throughput results.
+
+If that works, continue.
+
+24.3 Test UDP congestion
+
+Start a fresh server:
+
+h2 pkill iperf
+h2 iperf -s -u &
+
+Now generate approximately 8 Mbps of traffic over our configured 10 Mbps links:
+
+h1 iperf -c 10.0.0.2 -u -b 8M -t 30 &
+
+Immediately while it is running:
+
+h1 ping -c 20 -i 0.2 10.0.0.2
+
+This is important because Ryu should simultaneously start reporting noticeably larger:
+
+LINK UTIL | ...
+
+values.
+
+For example, instead of idle values such as:
+
+0.003 Mbps
+0.03%
+
+we want to see substantial utilization on whichever SDN path carries the traffic.
+
+24.4 Inspect the actual SDN route
+
+While traffic is running, execute:
+
+sh ovs-ofctl -O OpenFlow13 dump-flows s1
+sh ovs-ofctl -O OpenFlow13 dump-flows s2
+sh ovs-ofctl -O OpenFlow13 dump-flows s3
+sh ovs-ofctl -O OpenFlow13 dump-flows s4
+
+Also look at the Ryu terminal for:
+
+ROUTE | class=NORMAL | path=[...]
+
+This tells us what route Ryu actually selected.
+
+That's more important than tracepath.
+
+What counts as Step 24 passing
+
+I want to verify three things before we automate the full Braess comparison:
+
+iperf actually generates traffic between h1 and h2.
+Ryu's OpenFlow statistics show a substantial utilization increase on the links carrying that traffic.
+Ping continues to give us delay/loss observations while the network is loaded.
+
+Do not modify network_monitor.py or medroute_controller.py yet.
+
+There is a reason I'm stopping at this point instead of immediately giving you another huge file: if your 8 Mbps flow doesn't appear correctly in Ryu's utilization calculation, an automated OFF/ON Braess experiment built on top of it would produce meaningless results.
+
+Run the commands above and send me:
+
+iperf result
+ping result
+Ryu LINK UTIL lines while iperf is running
+Ryu ROUTE line
+
+Then I'll give you the full automated OFF → load → measure → ON → same load → measure → calculate Δ system cost part in one go.
