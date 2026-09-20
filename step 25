@@ -1,0 +1,390 @@
+Step 25 — Multi-flow hospital topology + flow-specific SDN foundation
+
+Step 24 is complete. Now we need to fix the biggest structural limitation in the current prototype: one h1→h2 flow is not enough for meaningful game-theoretic/Braess analysis.
+
+Step 25 will therefore do three things together:
+
+multiple hospital traffic sources + competing flows + controller-visible flow identities.
+
+We are not changing the game-theory/Braess algorithm yet. That comes in the next compact step once we know multiple competing flows work.
+
+25A — Replace the topology
+
+Exit the current Mininet session:
+
+mininet> exit
+
+Then:
+
+sudo mn -c
+cd /mnt/c/Users/subiw/medroute
+cp topology/network_monitor.py topology/network_monitor_step24_backup.py
+nano topology/network_monitor.py
+
+Replace the entire file with:
+
+from mininet.net import Mininet
+from mininet.node import RemoteController, OVSSwitch
+from mininet.link import TCLink
+from mininet.log import setLogLevel, info
+from mininet.cli import CLI
+
+import time
+
+
+def create_network():
+
+    net = Mininet(
+        controller=None,
+        switch=OVSSwitch,
+        link=TCLink,
+        autoSetMacs=True,
+        build=False
+    )
+
+    info("*** Adding remote SDN controller\n")
+
+    c0 = net.addController(
+        "c0",
+        controller=RemoteController,
+        ip="127.0.0.1",
+        port=6653
+    )
+
+    # ---------------------------------------------------------
+    # HOSPITAL END DEVICES
+    # ---------------------------------------------------------
+
+    info("*** Adding hospital hosts\n")
+
+    # Example medical-data sources.
+    # These labels represent experimental traffic classes;
+    # dataset replay will later drive the classification.
+    h1 = net.addHost("h1", ip="10.0.0.1/24")  # NORMAL
+    h2 = net.addHost("h2", ip="10.0.0.2/24")  # URGENT
+    h3 = net.addHost("h3", ip="10.0.0.3/24")  # CRITICAL
+
+    # Hospital monitoring/server destination
+    h4 = net.addHost("h4", ip="10.0.0.4/24")
+
+    # ---------------------------------------------------------
+    # SDN SWITCHES
+    # ---------------------------------------------------------
+
+    info("*** Adding OpenFlow switches\n")
+
+    s1 = net.addSwitch("s1", protocols="OpenFlow13")
+    s2 = net.addSwitch("s2", protocols="OpenFlow13")
+    s3 = net.addSwitch("s3", protocols="OpenFlow13")
+    s4 = net.addSwitch("s4", protocols="OpenFlow13")
+
+    # ---------------------------------------------------------
+    # HOST LINKS FIRST
+    # ---------------------------------------------------------
+
+    info("*** Adding host links\n")
+
+    # h1 and h2 enter through s1.
+    net.addLink(h1, s1, cls=TCLink, bw=10)
+    net.addLink(h2, s1, cls=TCLink, bw=10)
+
+    # h3 enters through s2.
+    net.addLink(h3, s2, cls=TCLink, bw=10)
+
+    # Hospital server attached to s4.
+    net.addLink(h4, s4, cls=TCLink, bw=10)
+
+    # ---------------------------------------------------------
+    # INTER-SWITCH NETWORK
+    # ---------------------------------------------------------
+
+    info("*** Adding upper path\n")
+
+    net.addLink(
+        s1,
+        s2,
+        cls=TCLink,
+        bw=10,
+        delay="5ms",
+        loss=2
+    )
+
+    net.addLink(
+        s2,
+        s4,
+        cls=TCLink,
+        bw=10,
+        delay="5ms",
+        loss=2
+    )
+
+    info("*** Adding lower path\n")
+
+    net.addLink(
+        s1,
+        s3,
+        cls=TCLink,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    net.addLink(
+        s3,
+        s4,
+        cls=TCLink,
+        bw=10,
+        delay="10ms",
+        loss=0
+    )
+
+    # ---------------------------------------------------------
+    # BRAESS CANDIDATE
+    # ---------------------------------------------------------
+
+    info("*** Adding Braess candidate link s2 <-> s3\n")
+
+    net.addLink(
+        s2,
+        s3,
+        cls=TCLink,
+        bw=10,
+        delay="1ms",
+        loss=0
+    )
+
+    # ---------------------------------------------------------
+    # START NETWORK
+    # ---------------------------------------------------------
+
+    info("*** Building network\n")
+
+    net.build()
+
+    c0.start()
+
+    for switch in [s1, s2, s3, s4]:
+        switch.start([c0])
+
+    info("\n")
+    info("=" * 65 + "\n")
+    info("MEDROUTE STEP 25 - MULTI-FLOW HOSPITAL SDN\n")
+    info("=" * 65 + "\n")
+
+    info("\nHospital traffic sources:\n")
+    info("  h1  10.0.0.1  experimental NORMAL source\n")
+    info("  h2  10.0.0.2  experimental URGENT source\n")
+    info("  h3  10.0.0.3  experimental CRITICAL source\n")
+    info("  h4  10.0.0.4  hospital server\n")
+
+    info("\nAvailable network structure:\n")
+    info("  s1 -> s2 -> s4\n")
+    info("  s1 -> s3 -> s4\n")
+    info("  s2 <-> s3   [Braess candidate]\n")
+
+    info("\nWaiting for Ryu topology discovery...\n")
+
+    time.sleep(8)
+
+    # ---------------------------------------------------------
+    # BASIC CONNECTIVITY
+    # ---------------------------------------------------------
+
+    info("\n*** Testing hospital-device connectivity\n")
+
+    net.ping(hosts=[h1, h2, h3, h4], timeout="2")
+
+    info("\n")
+    info("=" * 65 + "\n")
+    info("Entering Mininet CLI\n")
+    info("=" * 65 + "\n")
+
+    CLI(net)
+
+    info("*** Stopping network\n")
+    net.stop()
+
+
+if __name__ == "__main__":
+    setLogLevel("info")
+    create_network()
+
+Notice that we intentionally preserve the Braess candidate:
+
+s2 ↔ s3
+
+but now we have multiple sources:
+
+          h3
+           |
+          s2
+         / | \
+        /  |  \
+h1 -- s1   |   s4 -- h4
+h2 --/  \  |  /
+         \ | /
+          s3
+
+The source labels are currently controlled experimental labels, not claims that the hosts are actual medical devices. Dataset replay will later supply the healthcare values.
+
+25B — Syntax and launch
+
+Check:
+
+cd /mnt/c/Users/subiw/medroute
+python3 -m py_compile topology/network_monitor.py
+
+No output = good.
+
+Clean:
+
+sudo mn -c
+
+Terminal 1:
+
+cd /mnt/c/Users/subiw/medroute
+source ~/ryu-env/bin/activate
+ryu-manager --observe-links controller/medroute_controller.py
+
+Terminal 2:
+
+cd /mnt/c/Users/subiw/medroute
+sudo python3 topology/network_monitor.py
+
+The initial pingAll can have some loss because we have intentionally lossy links and controller learning. That's not automatically a failure.
+
+25C — Verify the three medical flows
+
+At:
+
+mininet>
+
+run:
+
+h1 ping -c 5 10.0.0.4
+h2 ping -c 5 10.0.0.4
+h3 ping -c 5 10.0.0.4
+
+All three should be able to reach h4.
+
+Now verify what Ryu learned by looking at its terminal.
+
+You should eventually see hosts corresponding to:
+
+10.0.0.1
+10.0.0.2
+10.0.0.3
+10.0.0.4
+
+and route calculations toward the server.
+
+25D — Generate simultaneous competing hospital traffic
+
+Now we'll deliberately create competing demand.
+
+First make sure old iperf processes aren't running:
+
+h1 pkill iperf
+h2 pkill iperf
+h3 pkill iperf
+h4 pkill iperf
+
+Start three UDP servers on different ports at h4:
+
+h4 iperf -s -u -p 5001 &
+h4 iperf -s -u -p 5002 &
+h4 iperf -s -u -p 5003 &
+
+Generate three simultaneous flows:
+
+h1 iperf -c 10.0.0.4 -u -p 5001 -b 3M -t 30 &
+h2 iperf -c 10.0.0.4 -u -p 5002 -b 3M -t 30 &
+h3 iperf -c 10.0.0.4 -u -p 5003 -b 3M -t 30 &
+
+We now have:
+
+h1 → h4    3 Mbps
+h2 → h4    3 Mbps
+h3 → h4    3 Mbps
+-------------------
+Offered demand ≈ 9 Mbps
+
+Do not accidentally run any client twice like in Step 24.
+
+While those are running:
+
+h3 ping -c 15 -i 0.2 10.0.0.4
+
+This represents our controlled critical-flow latency observation for this test.
+
+25E — Verify actual SDN traffic
+
+Immediately check:
+
+sh ovs-ofctl -O OpenFlow13 dump-flows s1
+sh ovs-ofctl -O OpenFlow13 dump-flows s2
+sh ovs-ofctl -O OpenFlow13 dump-flows s3
+sh ovs-ofctl -O OpenFlow13 dump-flows s4
+
+And watch Ryu's:
+
+LINK UTIL
+
+output.
+
+You should now see much higher utilization than the idle values from the earlier steps.
+
+Important limitation — intentional for this step
+
+Our current controller installs rules primarily using:
+
+ipv4_dst=dst_ip
+
+All three flows are going to:
+
+10.0.0.4
+
+Therefore they can still become aggregated onto the same destination route.
+
+That is not yet our final game-theoretic implementation.
+
+Step 25's purpose is to establish:
+
+multiple sources
+      +
+simultaneous competing demand
+      +
+SDN-visible congestion
+      +
+multiple available paths
+      +
+Braess candidate
+
+In the next compact step we'll upgrade the controller from:
+
+destination-based routing
+
+to something closer to:
+
+Flow =
+(source IP,
+ destination IP,
+ protocol,
+ source/destination port,
+ criticality)
+
+Then NORMAL, URGENT and CRITICAL flows can genuinely receive different strategies/routes.
+
+That's necessary before we can legitimately talk about players, strategies and Nash equilibrium.
+
+Step 25 PASS criteria
+
+Send me just these three things after running it:
+
+1. The three h1/h2/h3 → h4 ping results
+
+2. Ryu LINK UTIL lines while the three iperf clients are active
+
+3. The dump-flows output from s1, s2, s3 and s4
+
+If those work, Step 25 is complete and the next step will combine flow-specific SDN routing + prediction + game-theoretic/Nash logic instead of unnecessarily splitting those into multiple tiny steps
