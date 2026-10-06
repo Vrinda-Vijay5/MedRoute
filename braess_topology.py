@@ -11,6 +11,12 @@ from mininet.link import TCLink
 from mininet.net import Mininet
 from mininet.node import OVSKernelSwitch, RemoteController
 
+from braess_config import (
+    INTERSWITCH_CAPACITY_MBPS,
+    OUTER_LINK_DELAY_MS,
+    SHORT_LINK_DELAY_MS,
+)
+
 
 def create_braess_network(candidate_link_up: bool = False) -> Mininet:
     net = Mininet(controller=None, switch=OVSKernelSwitch, link=TCLink, autoSetMacs=True)
@@ -32,14 +38,18 @@ def create_braess_network(candidate_link_up: bool = False) -> Mininet:
         net.addLink(host, s1, bw=100, delay="1ms")
     for host in destinations:
         net.addLink(host, s4, bw=100, delay="1ms")
-    # Five 20 Mbit/s imaging flows fit together on one 100 Mbit/s branch. The
-    # central link is attractive because it joins the two low-delay edges, but
-    # using it makes the 100 Mbit/s aggregate also consume the ECG branch.
-    net.addLink(s1, s2, bw=100, delay="0.5ms")
-    net.addLink(s2, s4, bw=100, delay="12ms")
-    net.addLink(s1, s3, bw=100, delay="12ms")
-    net.addLink(s3, s4, bw=100, delay="0.5ms")
-    central = net.addLink(s2, s3, bw=100, delay="0.5ms")
+    # This preserves the currently configured empirical trial. Its 52 Mbit/s
+    # capacity is an experiment setting, not a derived Braess equilibrium
+    # parameter: the Mininet qdisc does not implement the linear link-cost law
+    # used by the classical model (documented in docs/braess_design.md).
+    net.addLink(s1, s2, bw=INTERSWITCH_CAPACITY_MBPS, delay="{}ms".format(SHORT_LINK_DELAY_MS))
+    net.addLink(s2, s4, bw=INTERSWITCH_CAPACITY_MBPS, delay="{}ms".format(OUTER_LINK_DELAY_MS))
+    net.addLink(s1, s3, bw=INTERSWITCH_CAPACITY_MBPS, delay="{}ms".format(OUTER_LINK_DELAY_MS))
+    net.addLink(s3, s4, bw=INTERSWITCH_CAPACITY_MBPS, delay="{}ms".format(SHORT_LINK_DELAY_MS))
+    central = net.addLink(
+        s2, s3, bw=INTERSWITCH_CAPACITY_MBPS,
+        delay="{}ms".format(SHORT_LINK_DELAY_MS),
+    )
     net.braess_candidate_link = central
     net.braess_candidate_initially_up = candidate_link_up
     return net

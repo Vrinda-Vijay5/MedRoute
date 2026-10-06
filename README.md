@@ -16,10 +16,12 @@ deterministic and SDN-based.
 
 ## Current evidence status
 
-The pure-Python implementation has a component test suite covering healthcare,
-monitoring, QoS, routing, Braess fallback/resumption, and persistence. Mininet,
-Open vSwitch, Ryu, and `iperf3` require Linux. See [RESULTS.md](RESULTS.md) and
-the original-state record in [AUDIT.md](AUDIT.md).
+The project owner has reported successful WSL execution of Ryu, Open vSwitch,
+Mininet, telemetry readiness, flow classification, path evaluation, Braess
+checks, OpenFlow rules, and UDP traffic. The latest reported dedicated Braess
+measurements did **not** satisfy the latency degradation criterion. This
+Windows export cannot independently rerun WSL. See [RESULTS.md](RESULTS.md)
+for the evidence limits and [AUDIT.md](AUDIT.md) for the original-state audit.
 
 ## Problem statement
 
@@ -62,6 +64,30 @@ The routing algorithm receives generic healthcare metadata. It does not read a
 CSV directly, so a future live adapter can implement `HealthcareDataSource`
 without modifying monitoring, cost, Braess, or OpenFlow code. No patient data
 is required or stored.
+
+## Dataset methodology
+
+[`data/healthcare_traffic_profiles.csv`](data/healthcare_traffic_profiles.csv)
+contains six synthetic healthcare **network workload** profiles. It declares
+traffic class, criticality, transport, destination port, offered rate, packet
+size, representative duration, endpoint roles, and workload rationale. The
+seeded synthetic source reads class names and offered rates from this file; a
+test checks its ports and criticalities against classifier policy. Values are
+explicit workload assumptions, not clinical facts. There are no patients or
+diagnoses. Experiment outputs are separate: Mininet/OpenFlow counters, `ping`,
+and `iperf3` supply measured QoS. No measured QoS result belongs in the input
+CSV.
+
+## Why this is not hardcoded
+
+Paths are discovered from the live topology and candidates are generated from
+the NetworkX graph. Routing costs use current telemetry and configured profile
+weights. Braess checks evaluate a projected candidate state before
+installation; the controller does not force a preferred route. Experiment
+settings are declared before a run and copied into raw evidence; measurements
+are written independently to SQLite. Class-to-port and criticality mappings
+are explicit policy by design, while paths and outcomes are computed. No
+measured result, winning route, or expected inequality is embedded in source.
 
 ## Implemented modules
 
@@ -260,11 +286,15 @@ A candidate is `BRAESS_RISK` when any condition holds:
 
 Otherwise it is `SAFE`. If all measured candidates are unsafe, MedRoute keeps
 the current route. Initial routes still receive capacity and protected-flow
-checks. The separate `braess_topology.py` uses two symmetric outer branches and
-a low-delay central link. Its inter-switch links are shaped at 100 Mbit/s, and
-the dedicated script supplies that configured capacity to the monitor instead
-of accepting an unrelated virtual-interface speed advertised by OVS. Whether a
-run demonstrates degradation must still be decided from stored measurements.
+checks. The separate `braess_topology.py` uses two outer branches and a
+low-delay central link. The current dedicated trial uses 52 Mbit/s
+inter-switch links, 12 ms and 0.5 ms configured delays, a 2 Mbit/s ECG flow,
+and five 20 Mbit/s imaging flows. Its script supplies configured capacity to
+the monitor instead of using a virtual-interface speed from OVS. These are
+reproducible empirical settings, not a derived classical Braess equilibrium.
+The theory and mapping limitation are documented in
+[`docs/braess_design.md`](docs/braess_design.md). Only measured before/after
+outcomes establish degradation or avoidance.
 
 ## Storage schema
 
@@ -280,7 +310,7 @@ evidence. The schema contains:
 Raw `ping` text and full `iperf3` JSON are kept under `results/raw`. This lets a
 reviewer audit every plotted value.
 
-## Clean setup on this Windows laptop
+## Clean setup
 
 Native Windows cannot run Mininet namespaces or the Open vSwitch kernel setup.
 Use WSL2 with Ubuntu, or the official Mininet VM. In an Administrator
@@ -316,17 +346,25 @@ Upstream now marks Ryu unmaintained. If `ryu-manager --version` still fails
 after the patch, stop and record the complete traceback rather than continuing
 to the Mininet demo or changing more dependency versions at random.
 
-The working native-Windows interpreter can run dependency-light tests with:
+From Ubuntu 22.04/WSL after setup, the recommended validation sequence is:
 
-```powershell
-& 'C:\Users\VICTUS\AppData\Local\Programs\Python\Python311\python.exe' -m unittest discover -s tests -v
+```bash
+cd ~/MedRoute
+source .venv/bin/activate
+python -m unittest discover -s tests -v
+MEDROUTE_MODE=medroute bash scripts/run_demo.sh congestion
+bash scripts/run_experiment_matrix.sh
+bash scripts/run_braess_experiment.sh
+python analysis/generate_plots.py
 ```
 
-The local `.venv` exists, but dependency download was blocked in this session.
+Mininet/Open vSwitch/Ryu/iperf integration requires Linux and root privileges;
+the Windows workspace cannot verify those runtime components.
 
 ## Faculty demo
 
-After Linux setup, the shortest complete sequence is:
+For a 5–7 minute review, open two Ubuntu terminals. In Terminal 1 start the
+controller and Mininet CLI:
 
 ```bash
 cd ~/MedRoute
@@ -334,31 +372,40 @@ source .venv/bin/activate
 MEDROUTE_MODE=medroute bash scripts/run_demo.sh congestion
 ```
 
-The script starts Ryu with link discovery and opens the Mininet CLI. At the
-`mininet>` prompt:
+At `mininet>` run the connectivity check, then the ECG test, inspect installed
+OpenFlow rules, and exit:
 
 ```text
 pingall
-h2 iperf3 -s -1 -p 5001 &
-h1 iperf3 -c 10.0.0.2 -u -b 2M -t 15 -p 5001
-bg2 iperf3 -s -1 -p 6001 &
-bg1 iperf3 -c 10.0.0.4 -u -b 85M -t 30 -p 6001 &
 h2 iperf3 -s -1 -p 5001 &
 h1 iperf3 -c 10.0.0.2 -u -b 2M -t 15 -p 5001
 sh ovs-ofctl -O OpenFlow13 dump-flows s1
 exit
 ```
 
-The controller log `results/controller-demo.log` should show switch/link
-discovery, traffic type and criticality, candidate raw and normalized metrics,
-cost, Braess `SAFE`/`BRAESS_RISK`, decision reason, and installed ports. Query
-stored evidence with:
+In Terminal 2, watch the decision log and inspect saved evidence:
 
 ```bash
-sqlite3 results/medroute.db '.tables'
-sqlite3 -header -column results/medroute.db \
-  'select timestamp,flow_id,path_json,qos_cost,braess_status,safe from path_evaluations order by id desc limit 10;'
+cd ~/MedRoute
+tail -f results/controller-demo.log
 ```
+
+After the demo exits, query the database without requiring the optional
+`sqlite3` command-line program:
+
+```bash
+python - <<'PY'
+import sqlite3
+with sqlite3.connect("results/medroute.db") as db:
+    for row in db.execute("select scenario,routing_mode,traffic_type,latency_ms,jitter_ms,packet_loss_pct,throughput_bps,selected_path_json from experiments order by id desc limit 5"):
+        print(row)
+PY
+```
+
+Look for telemetry READY, `type=ECG criticality=5`, measured candidate paths,
+SAFE/RISK validation, selected route, and rule installation. Existing plots
+can be shown after an experiment run with `python analysis/generate_plots.py`;
+they are not populated by the short live demo alone.
 
 ## Experimental evaluation
 
@@ -385,16 +432,15 @@ Run the separate before/after/safety-gate sequence with:
 bash scripts/run_braess_experiment.sh
 ```
 
-It collects three independent loaded trials: candidate link down with QoS,
-candidate link up with QoS, and candidate link up with full MedRoute. Each
-trial establishes a continuous ECG flow first, then starts five simultaneous
-20 Mbit/s IMAGING flows. Together the imaging flows fit one outer branch; the
-central link appears attractive because it joins the low-delay edges, but using
-it also places their aggregate on the ECG branch. Inspect the printed rows, raw
-JSON, and matching controller logs. Report a Braess-type
-degradation only if the unprotected after trial is actually worse than the
-before trial; report successful avoidance only if the MedRoute log records the
-harmful candidate as `BRAESS_RISK` and the measured protected outcome improves.
+It collects three independent loaded trials: candidate down with QoS,
+candidate up with QoS, and candidate up with MedRoute. Each performs `pingAll`
+with the candidate down, waits for telemetry, starts ECG, then starts five
+20 Mbit/s imaging streams. Inspect printed rows, raw JSON, and controller logs.
+This is a measured stress comparison, not a verified classical Braess
+equilibrium. Claim latency degradation only when measured
+`after_unprotected > before`. Claim avoidance only when measured
+`after_medroute < after_unprotected` and the matching log shows a rejected
+risky candidate plus selection of a safe alternative.
 
 ## Testing
 
@@ -403,7 +449,7 @@ python -m compileall -q -f .
 python -m unittest discover -s tests -v
 ```
 
-Tests cover classification, priorities, data adapters, topology-independent
+Tests cover classification, priorities, workload-dataset consistency, data adapters, topology-independent
 candidate generation, metric aggregation, normalization, weighted cost,
 Braess safe/risk comparison, safe path selection, missing-metric fallback,
 hysteresis, OpenFlow counter math, Ryu LLDP timestamp lookup, zero-rate link
@@ -413,8 +459,8 @@ switch rule behavior require the Linux integration run.
 
 ## Limitations
 
-- No Mininet experiment has yet run on this laptop; there are no defensible
-  performance improvements to quote.
+- Linux experiments cannot be rerun from this Windows workspace; WSL results
+  reported by the project owner are summarized in `RESULTS.md`.
 - Ryu 4.34 is unmaintained and can be sensitive to Python/eventlet versions.
 - LLDP-based latency is a controller-derived link estimate. Application RTT
   comes from ping and should be reported separately.
@@ -422,8 +468,9 @@ switch rule behavior require the Linux integration run.
 - The utilization projection assumes the configured expected application rate;
   a future version should use per-flow OpenFlow meters/counters when supported.
 - The queueing projection is a safety model that needs empirical calibration.
-- The Braess topology is provided, but an actual repeatable Braess effect has
-  not yet been demonstrated or measured here.
+- The dedicated stress experiment has not demonstrated the required measured
+  latency degradation in the reported runs. Its classical-model mapping is
+  incomplete, as described in `docs/braess_design.md`.
 - Rule priority does not provide strict bandwidth reservation. Queue/QoS
   configuration is future SDN work if faculty requires hard guarantees.
 - Host mobility, IPv6, controller failover, authentication, and production
@@ -454,7 +501,10 @@ normalization, class-specific QoS cost, candidate selection, deterministic
 Braess validation, telemetry warm-up fallback, anti-flapping logic, SQLite
 persistence, and Ryu/OpenFlow integration code.
 
-Do not yet say that this laptop has demonstrated dynamic OpenFlow rerouting,
-improved critical-flow performance, an empirical Braess paradox, statistically
-significant gains, wearable input, production readiness, or patentability.
-Those claims require the Linux commands above and preserved experimental data.
+The owner has reported live OpenFlow routing and forwarding in WSL, but this
+Windows copy cannot independently revalidate it. Do not claim empirical
+Braess degradation, MedRoute avoidance of that measured degradation, universal
+or statistically significant gains, wearable integration, clinical
+validation, production readiness, or patentability. The reported Braess
+measurements do not meet the stated criterion; broader claims need repeated
+preserved trials and appropriate analysis.

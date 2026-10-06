@@ -1,34 +1,42 @@
-# Experiment result status
+# Experimental evidence status
 
-No Mininet/Open vSwitch experiment was executed on this Windows laptop. There
-are therefore no baseline-versus-MedRoute performance numbers to report yet.
+## Dedicated Braess trials reported from WSL by the project owner
 
-The repository contains an experiment runner that writes raw `ping` and
-`iperf3 -J` evidence plus structured SQLite rows. The plot generator exits when
-the experiment table is empty, which prevents placeholder or fabricated graphs.
+The following are the owner's latest reported measurements, not a rerun in
+this Windows workspace. The raw WSL SQLite database, iperf JSON, and complete
+controller logs were not present in this exported copy, so they cannot be
+independently re-audited here.
 
-Verified in the user's Ubuntu 22.04/WSL2 environment before the LLDP telemetry
-pipeline repair:
+| Configured inter-switch capacity | Trial | Selected-path ECG RTT |
+|---:|---|---:|
+| 100 Mbit/s | before, QoS | about 29.554 ms |
+| 100 Mbit/s | after_unprotected, QoS | about 9.1 ms |
+| 52 Mbit/s | before, QoS | 29.554 ms |
+| 52 Mbit/s | after_unprotected, QoS | 9.1 ms |
+| 52 Mbit/s | after_medroute, MedRoute | 7.897 ms |
 
-```text
-python -m unittest discover -s tests -v         17 tests, PASS
-Mininet pingall                                 12/12 received, 0% dropped
-UDP healthcare iperf                           about 2.00 Mbit/s
-UDP receiver jitter                            about 0.132 ms
-UDP receiver loss                              0/2590 packets
-```
+Neither reported run satisfies the primary latency criterion
+`after_unprotected > before`. The measurements therefore do **not** demonstrate
+latency-based Braess degradation. The 52 Mbit/s run also does not demonstrate
+avoidance of such a measured degradation because there was no observed
+unprotected degradation to avoid. The controller's projected `BRAESS_RISK`
+logs, where present, describe the validator's model decision and do not change
+this empirical conclusion.
 
-These tests use explicit fixtures to check formulas and decision logic. Fixture
-values are test inputs and must not be presented as experimental network data.
+Earlier WSL checks reported a working Ryu 4.34 / Open vSwitch / Mininet setup,
+21/21 tests at that point in development, telemetry readiness, OpenFlow rule
+installation, and real iperf UDP measurements. Those are historical
+operator-reported checks. They are not a current run of the final tree.
 
-Those WSL observations prove fallback forwarding and OpenFlow installation;
-they do not yet prove that measured-QoS/Braess mode ran. The persistent 0/8
-telemetry state was traced to an invalid Ryu `Port` construction in the LLDP
-timestamp lookup and has now been repaired.
+## Current workspace validation
 
-The current suite contains 21 tests. It adds Ryu-compatible LLDP timestamp
-lookup, 0/N to N/N readiness, measured idle-link zeros, topology/metric key
-matching, stale-LLDP rejection, and monitor-to-routing warm-up transition.
-Thirteen dependency-light tests pass in this Windows workspace; NetworkX is
-absent here, so the eight routing tests require the WSL environment. Run the
-current full total inside Linux with the command in `README.md`.
+This repository copy is on Windows and does not contain the WSL runtime,
+Mininet namespaces, Open vSwitch, or Ryu. Current source-level test status and
+commands must be reported from the active environment. In this workspace,
+NetworkX is missing from `.venv`; therefore routing-engine tests cannot import.
+Do not interpret fixture values or component tests as network measurements.
+
+Experiment artifacts are generated under `results/` and intentionally ignored
+by Git. Preserve the raw `results/raw/*.json`, SQLite database, and matching
+controller logs for every reported run. Repeat trials and report dispersion
+before drawing broader performance conclusions.

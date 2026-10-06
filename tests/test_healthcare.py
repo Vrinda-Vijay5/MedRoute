@@ -3,7 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from healthcare_data import CsvHealthcareDataSource, SyntheticHealthcareDataSource
+from healthcare_data import (
+    CsvHealthcareDataSource,
+    SyntheticHealthcareDataSource,
+    load_healthcare_workload_profiles,
+)
 from healthcare_pipeline import HealthcarePipeline
 from traffic_classifier import (
     HealthcareTrafficClassifier,
@@ -85,6 +89,29 @@ class HealthcareTests(unittest.TestCase):
         second = [record.traffic_type for record in SyntheticHealthcareDataSource(7).records(8)]
         self.assertEqual(first, second)
 
+    def test_workload_dataset_is_complete_and_matches_classifier_policy(self):
+        profiles = load_healthcare_workload_profiles()
+        classifier = HealthcareTrafficClassifier()
+        self.assertEqual(set(profiles), set(classifier.TRAFFIC_TYPES))
+        for name, workload in profiles.items():
+            with self.subTest(traffic_type=name):
+                policy = classifier.classify(name)
+                self.assertEqual(workload["criticality"], policy["criticality"])
+                self.assertEqual(workload["destination_port"], policy["udp_port"])
+                self.assertEqual(workload["transport_protocol"], "UDP")
+                self.assertGreater(workload["offered_rate_bps"], 0)
+                self.assertEqual(
+                    SyntheticHealthcareDataSource.DEFAULT_RATES[name],
+                    workload["offered_rate_bps"],
+                )
+        for record in SyntheticHealthcareDataSource(seed=2).records(30):
+            workload = profiles[record.traffic_type]
+            self.assertEqual(record.payload_bytes, workload["packet_size_bytes"])
+            self.assertEqual(record.expected_rate_bps, workload["offered_rate_bps"])
+            self.assertEqual(record.destination_port, workload["destination_port"])
+            self.assertEqual(record.criticality, workload["criticality"])
+            self.assertEqual(record.duration_seconds, workload["duration_seconds"])
+
     def test_csv_source_and_pipeline_share_interface(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "traffic.csv"
@@ -95,6 +122,8 @@ class HealthcareTests(unittest.TestCase):
             result = HealthcarePipeline(CsvHealthcareDataSource(path)).process(None)
         self.assertEqual(result[0]["traffic_type"], "ECG")
         self.assertEqual(result[0]["criticality"], 5)
+        self.assertEqual(result[0]["destination_port"], 5001)
+        self.assertEqual(result[0]["expected_rate_bps"], 500_000)
 
 
 if __name__ == "__main__":
