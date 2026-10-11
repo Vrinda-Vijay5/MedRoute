@@ -161,6 +161,21 @@ class MedRouteController(app_manager.RyuApp):
         if previous != (dpid, port_no):
             self.logger.info("Host learned: %s (%s) -> s%s port %s", ip_address, mac_address, dpid, port_no)
 
+    def _is_host_facing_port(self, dpid: int, port_no: int) -> bool:
+        """Return whether a port can be the attachment point of an endpoint.
+
+        A packet from a host is seen on an access port.  Packets forwarded by
+        another switch are seen on an inter-switch port and must not update
+        ``host_port``; doing so moves the endpoint to the middle of a path and
+        can blackhole the next packet while the path is being installed.
+        """
+        inter_switch_ports = {
+            source_port
+            for (source, _destination), source_port in self.port_map.items()
+            if source == dpid
+        }
+        return port_no not in inter_switch_ports
+
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self, ev):
         msg = ev.msg
@@ -177,7 +192,8 @@ class MedRouteController(app_manager.RyuApp):
 
         arp_packet = pkt.get_protocol(arp.arp)
         if arp_packet is not None:
-            self.learn_host(arp_packet.src_ip, eth.src, datapath.id, in_port)
+            if self._is_host_facing_port(datapath.id, in_port):
+                self.learn_host(arp_packet.src_ip, eth.src, datapath.id, in_port)
             self._forward_arp_without_loop(msg, arp_packet.dst_ip)
             return
 
@@ -185,7 +201,8 @@ class MedRouteController(app_manager.RyuApp):
         if ip_packet is None:
             self._learning_switch_packet_out(msg, eth.dst)
             return
-        self.learn_host(ip_packet.src, eth.src, datapath.id, in_port)
+        if self._is_host_facing_port(datapath.id, in_port):
+            self.learn_host(ip_packet.src, eth.src, datapath.id, in_port)
         destination_location = self.host_port.get(ip_packet.dst)
         if destination_location is None:
             self._learning_switch_packet_out(msg, eth.dst)

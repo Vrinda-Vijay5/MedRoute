@@ -22,7 +22,7 @@ run_trial() {
     >"$controller_log" 2>&1 &
   local controller_pid=$!
   sleep 4
-  if ! sudo -E "${VIRTUAL_ENV}/bin/python" braess_experiment.py \
+  if ! sudo -E /usr/bin/python3 braess_experiment.py \
     --label "$label" --candidate-link "$link_state" --routing-mode "$mode" \
     --controller-log "$controller_log" \
     --database "$PROJECT_DIR/results/medroute.db"; then

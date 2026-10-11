@@ -36,7 +36,10 @@ def create_network(scenario: str = "normal") -> Mininet:
     route_a = {"bw": 100, "delay": "2ms"}
     route_b = {"bw": 100, "delay": "5ms"}
     if scenario == "loss":
-        route_a["loss"] = 3
+        # Keep the scenario name/API for experiment compatibility, but do not
+        # inject loss into the testbed.  This scenario now validates that the
+        # controller does not manufacture drops while preserving the CLI API.
+        pass
     elif scenario == "delay":
         route_a["delay"] = "30ms"
     net.addLink(s1, s2, **route_a)

@@ -1,0 +1,874 @@
+loading app medroute_controller.py
+loading app ryu.controller.ofp_handler
+loading app ryu.topology.switches
+loading app ryu.controller.ofp_handler
+instantiating app medroute_controller.py of MedRouteController
+MedRoute controller started in medroute mode; evidence=results/medroute.db; link_capacity_bps=OpenFlow/default
+instantiating app ryu.controller.ofp_handler of OFPHandler
+instantiating app ryu.topology.switches of Switches
+TELEMETRY STATUS WARMUP complete=0/0 missing=[] counters={'registered_links': 0, 'measured_links': 0, 'complete_links': 0, 'port_rates': 0, 'lldp_links': 0, 'echo_switches': 0}
+Switch connected: s1
+Discovered switches: [1]
+Discovered directed links: []
+Switch connected: s2
+Discovered switches: [1, 2]
+Discovered directed links: []
+Discovered switches: [1, 2]
+Discovered directed links: [(2, 1)]
+Discovered switches: [1, 2]
+Discovered directed links: [(1, 2), (2, 1)]
+Switch connected: s3
+Discovered switches: [1, 2, 3]
+Discovered directed links: [(1, 2), (2, 1)]
+Discovered switches: [1, 2, 3]
+Discovered directed links: [(1, 2), (2, 1), (3, 1)]
+Discovered switches: [1, 2, 3]
+Discovered directed links: [(1, 2), (1, 3), (2, 1), (3, 1)]
+Switch connected: s4
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(1, 2), (1, 3), (2, 1), (3, 1)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(1, 2), (1, 3), (2, 1), (3, 1), (4, 3), (4, 2)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(1, 2), (1, 3), (2, 1), (3, 1), (4, 3), (4, 2)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(1, 2), (1, 3), (2, 1), (2, 4), (3, 1), (4, 3), (4, 2)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(1, 2), (1, 3), (2, 1), (2, 4), (3, 1), (3, 4), (4, 3), (4, 2)]
+TELEMETRY STATUS WARMUP complete=0/8 missing=[1->2:source_port_rate_missing_second_sample,destination_port_counter_missing,destination_port_rate_missing_second_sample,destination_echo_rtt_missing,corrected_lldp_latency_missing,link_metric_not_computed; 1->3:source_port_rate_missing_second_sample,destination_port_counter_missing,destination_port_rate_missing_second_sample,destination_echo_rtt_missing,corrected_lldp_latency_missing,link_metric_not_computed; 2->1:source_port_counter_missing,source_port_rate_missing_second_sample,destination_port_rate_missing_second_sample,source_echo_rtt_missing,corrected_lldp_latency_missing,link_metric_not_computed; 2->4:source_port_counter_missing,source_port_rate_missing_second_sample,destination_port_counter_missing,destination_port_rate_missing_second_sample,source_echo_rtt_missing,destination_echo_rtt_missing,corrected_lldp_latency_missing,link_metric_not_computed; 3->1:source_port_counter_missing,source_port_rate_missing_second_sample,destination_port_rate_missing_second_sample,source_echo_rtt_missing,corrected_lldp_latency_missing,link_metric_not_computed; 3->4:source_port_counter_missing,source_port_rate_missing_second_sample,destination_port_counter_missing,destination_port_rate_missing_second_sample,source_echo_rtt_missing,destination_echo_rtt_missing,corrected_lldp_latency_missing,link_metric_not_computed; 4->2:source_port_counter_missing,source_port_rate_missing_second_sample,destination_port_counter_missing,destination_port_rate_missing_second_sample,source_echo_rtt_missing,destination_echo_rtt_missing,corrected_lldp_latency_missing,link_metric_not_computed; 4->3:source_port_counter_missing,source_port_rate_missing_second_sample,destination_port_counter_missing,destination_port_rate_missing_second_sample,source_echo_rtt_missing,destination_echo_rtt_missing,corrected_lldp_latency_missing,link_metric_not_computed] counters={'registered_links': 8, 'measured_links': 0, 'complete_links': 0, 'port_rates': 0, 'lldp_links': 0, 'echo_switches': 1}
+TELEMETRY STATUS WARMUP complete=0/8 missing=[1->2:destination_port_rate_missing_second_sample,link_metric_not_computed; 1->3:destination_port_rate_missing_second_sample,link_metric_not_computed; 2->1:source_port_rate_missing_second_sample,link_metric_not_computed; 2->4:source_port_rate_missing_second_sample,destination_port_rate_missing_second_sample,link_metric_not_computed; 3->1:source_port_rate_missing_second_sample,link_metric_not_computed; 3->4:source_port_rate_missing_second_sample,destination_port_rate_missing_second_sample,link_metric_not_computed; 4->2:source_port_rate_missing_second_sample,destination_port_rate_missing_second_sample,link_metric_not_computed; 4->3:source_port_rate_missing_second_sample,destination_port_rate_missing_second_sample,link_metric_not_computed] counters={'registered_links': 8, 'measured_links': 0, 'complete_links': 0, 'port_rates': 5, 'lldp_links': 8, 'echo_switches': 4}
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Host learned: 10.0.0.1 (00:00:00:00:00:01) -> s1 port 1
+Host learned: 10.0.0.2 (00:00:00:00:00:02) -> s4 port 1
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.016 ms loss=0.102% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000324, 'loss': 0.02032, 'utilization': 0.0} | cost=0.005161
+PATH 1->3->4 | latency=0.000 ms jitter=0.036 ms loss=0.120% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000715, 'loss': 0.023911, 'utilization': 0.0} | cost=0.006156
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.019 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000375, 'loss': 0.0, 'utilization': 0.0} | cost=0.000094
+PATH 4->3->1 | latency=0.000 ms jitter=0.044 ms loss=0.018% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000875, 'loss': 0.003595, 'utilization': 0.0} | cost=0.001117
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Host learned: 10.0.0.3 (00:00:00:00:00:03) -> s1 port 2
+Installed flow on s1 -> port 2 for 10.0.0.1 -> 10.0.0.3
+PATH 1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(1,) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(1,) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 1 for 10.0.0.3 -> 10.0.0.1
+PATH 1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(1,) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(1,) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Host learned: 10.0.0.4 (00:00:00:00:00:04) -> s4 port 2
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.1 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.015 ms loss=0.102% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000301, 'loss': 0.02032, 'utilization': 0.0} | cost=0.005155
+PATH 1->3->4 | latency=0.000 ms jitter=0.036 ms loss=0.120% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000715, 'loss': 0.023911, 'utilization': 0.0} | cost=0.006156
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.4 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.018 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000357, 'loss': 0.0, 'utilization': 0.0} | cost=0.000089
+PATH 4->3->1 | latency=0.000 ms jitter=0.039 ms loss=0.018% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000779, 'loss': 0.003595, 'utilization': 0.0} | cost=0.001093
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.2 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.018 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000357, 'loss': 0.0, 'utilization': 0.0} | cost=0.000089
+PATH 4->3->1 | latency=0.000 ms jitter=0.039 ms loss=0.018% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000779, 'loss': 0.003595, 'utilization': 0.0} | cost=0.001093
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.3 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.015 ms loss=0.102% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000301, 'loss': 0.02032, 'utilization': 0.0} | cost=0.005155
+PATH 1->3->4 | latency=0.000 ms jitter=0.031 ms loss=0.120% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000626, 'loss': 0.023911, 'utilization': 0.0} | cost=0.006134
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.40% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.40% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 2 for 10.0.0.2 -> 10.0.0.4
+PATH 4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(4,) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(4,) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 1 for 10.0.0.4 -> 10.0.0.2
+PATH 4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(4,) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(4,) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.3 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.015 ms loss=0.102% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000301, 'loss': 0.02032, 'utilization': 0.0} | cost=0.005155
+PATH 1->3->4 | latency=0.000 ms jitter=0.031 ms loss=0.120% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000626, 'loss': 0.023911, 'utilization': 0.0} | cost=0.006134
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.40% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.40% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.4 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.015 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0003, 'loss': 0.0, 'utilization': 0.0} | cost=0.000075
+PATH 4->3->1 | latency=0.000 ms jitter=0.035 ms loss=0.018% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0007, 'loss': 0.003595, 'utilization': 0.0} | cost=0.001074
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.40% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.40% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.007% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.001388, 'utilization': 0.0} | cost=0.000347
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 99.99% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=2.45% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.020% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00408, 'utilization': 0.0} | cost=0.001020
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002692, 'utilization': 0.0} | cost=0.000673
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 34.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.45% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.1 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.007% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.001388, 'utilization': 0.0} | cost=0.000347
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 99.99% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=2.45% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.4 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.020% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00408, 'utilization': 0.0} | cost=0.001020
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002692, 'utilization': 0.0} | cost=0.000673
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 34.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.45% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.2 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.020% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00408, 'utilization': 0.0} | cost=0.001020
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002692, 'utilization': 0.0} | cost=0.000673
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 34.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.45% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.3 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.007% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.001388, 'utilization': 0.0} | cost=0.000347
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 99.99% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=2.45% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s3 -> port 2 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.3 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.007% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.001388, 'utilization': 0.0} | cost=0.000347
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 99.99% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=2.45% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s3 -> port 1 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.4 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.020% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00408, 'utilization': 0.0} | cost=0.001020
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002692, 'utilization': 0.0} | cost=0.000673
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 34.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.45% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 34.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.55% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.4 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 34.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.55% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.2 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 34.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.55% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.4 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 34.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.55% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.041% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.008285, 'utilization': 0.0} | cost=0.002071
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.054% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.010883, 'utilization': 0.0} | cost=0.002721
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 23.87% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.92% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.1 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.041% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.008285, 'utilization': 0.0} | cost=0.002071
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.054% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.010883, 'utilization': 0.0} | cost=0.002721
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 23.87% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.92% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.3 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.041% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.008285, 'utilization': 0.0} | cost=0.002071
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.054% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.010883, 'utilization': 0.0} | cost=0.002721
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 23.87% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.92% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.3 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.041% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.008285, 'utilization': 0.0} | cost=0.002071
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.054% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.010883, 'utilization': 0.0} | cost=0.002721
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 23.87% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.92% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.037% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.007404, 'utilization': 0.0} | cost=0.001851
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.065% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.012952, 'utilization': 0.0} | cost=0.003238
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:56370->10.0.0.2:5001 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.086% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.017256, 'utilization': 0.0} | cost=0.004314
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.114% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.022801, 'utilization': 0.0} | cost=0.005700
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:56370 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.037% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.007404, 'utilization': 0.0} | cost=0.001851
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.065% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.012952, 'utilization': 0.0} | cost=0.003238
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:46340->10.0.0.2:5001 type=ECG criticality=5 selected=(1, 2, 4) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.17% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.17% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.091% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.01822, 'utilization': 0.0} | cost=0.004555
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.091% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.01822, 'utilization': 0.0} | cost=0.004555
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:46340 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest measured QoS cost after Braess validation
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.55% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.55% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.021% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.000206} | cost=0.000052
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 99.98% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.1 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.021% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.000206} | cost=0.000052
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 99.98% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.3 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.021% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.000206} | cost=0.000052
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 99.98% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s3 -> port 2 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.3 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.021% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.000206} | cost=0.000052
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 99.98% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.068% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.013675, 'utilization': 0.0} | cost=0.003419
+PATH 4->3->1 | latency=0.000 ms jitter=4.340 ms loss=0.152% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.086801, 'loss': 0.030425, 'utilization': 0.0} | cost=0.029306
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:46340 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 88.33% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.14% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.025% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00503, 'utilization': 0.0} | cost=0.001258
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.048% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.009617, 'utilization': 0.0} | cost=0.002404
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 47.69% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.46% protected_change=0.80% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.1 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.025% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00503, 'utilization': 0.0} | cost=0.001258
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.048% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.009617, 'utilization': 0.0} | cost=0.002404
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 47.69% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.46% protected_change=0.80% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.3 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.025% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00503, 'utilization': 0.0} | cost=0.001258
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.048% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.009617, 'utilization': 0.0} | cost=0.002404
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 47.69% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.46% protected_change=0.80% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.3 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.025% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00503, 'utilization': 0.0} | cost=0.001258
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.048% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.009617, 'utilization': 0.0} | cost=0.002404
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 47.69% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.46% protected_change=0.80% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.116% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.023231, 'utilization': 0.0} | cost=0.005808
+PATH 4->3->1 | latency=0.000 ms jitter=0.191 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.003818, 'loss': 0.018001, 'utilization': 0.0} | cost=0.005455
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 6.08% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.4 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.116% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.023231, 'utilization': 0.0} | cost=0.005808
+PATH 4->3->1 | latency=0.000 ms jitter=0.191 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.003818, 'loss': 0.018001, 'utilization': 0.0} | cost=0.005455
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 6.08% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.2 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.116% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.023231, 'utilization': 0.0} | cost=0.005808
+PATH 4->3->1 | latency=0.000 ms jitter=0.191 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.003818, 'loss': 0.018001, 'utilization': 0.0} | cost=0.005455
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 6.08% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s3 -> port 1 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.4 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.116% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.023231, 'utilization': 0.0} | cost=0.005808
+PATH 4->3->1 | latency=0.000 ms jitter=0.191 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.003818, 'loss': 0.018001, 'utilization': 0.0} | cost=0.005455
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 6.08% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005528, 'utilization': 0.0} | cost=0.001382
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000294, 'utilization': 0.0} | cost=0.000073
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:56370->10.0.0.2:5001 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 94.69% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.116% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.023231, 'utilization': 0.0} | cost=0.005808
+PATH 4->3->1 | latency=0.000 ms jitter=0.191 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.003818, 'loss': 0.018001, 'utilization': 0.0} | cost=0.005455
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:56370 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 6.08% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005528, 'utilization': 0.0} | cost=0.001382
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000294, 'utilization': 0.0} | cost=0.000073
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:46340->10.0.0.2:5001 type=ECG criticality=5 selected=(1, 3, 4) reason=selected lowest-cost safe path with 94.69% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.20% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.116% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.023231, 'utilization': 0.0} | cost=0.005808
+PATH 4->3->1 | latency=0.000 ms jitter=0.191 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.003818, 'loss': 0.018001, 'utilization': 0.0} | cost=0.005455
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:46340 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 6.08% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.033% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.006645, 'utilization': 0.0} | cost=0.001661
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005673, 'utilization': 0.0} | cost=0.001418
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 14.64% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=1.42% protected_change=0.71% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.1 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.033% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.006645, 'utilization': 0.0} | cost=0.001661
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005673, 'utilization': 0.0} | cost=0.001418
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 14.64% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=1.42% protected_change=0.71% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.3 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.033% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.006645, 'utilization': 0.0} | cost=0.001661
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005673, 'utilization': 0.0} | cost=0.001418
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 14.64% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=1.42% protected_change=0.71% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s3 -> port 2 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.3 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.033% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.006645, 'utilization': 0.0} | cost=0.001661
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005673, 'utilization': 0.0} | cost=0.001418
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 14.64% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=1.42% protected_change=0.71% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000181, 'utilization': 0.0} | cost=0.000045
+PATH 4->3->1 | latency=0.000 ms jitter=0.007 ms loss=0.019% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000134, 'loss': 0.003895, 'utilization': 0.0} | cost=0.001007
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 95.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.74% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.4 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000181, 'utilization': 0.0} | cost=0.000045
+PATH 4->3->1 | latency=0.000 ms jitter=0.007 ms loss=0.019% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000134, 'loss': 0.003895, 'utilization': 0.0} | cost=0.001007
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 95.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.74% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.2 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000181, 'utilization': 0.0} | cost=0.000045
+PATH 4->3->1 | latency=0.000 ms jitter=0.007 ms loss=0.019% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000134, 'loss': 0.003895, 'utilization': 0.0} | cost=0.001007
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 95.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.74% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.4 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000181, 'utilization': 0.0} | cost=0.000045
+PATH 4->3->1 | latency=0.000 ms jitter=0.007 ms loss=0.019% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000134, 'loss': 0.003895, 'utilization': 0.0} | cost=0.001007
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 95.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.74% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.048% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00957, 'utilization': 0.0} | cost=0.002392
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.066% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.013282, 'utilization': 0.0} | cost=0.003321
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:56370->10.0.0.2:5001 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 27.95% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.74% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000181, 'utilization': 0.0} | cost=0.000045
+PATH 4->3->1 | latency=0.000 ms jitter=0.007 ms loss=0.019% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000134, 'loss': 0.003895, 'utilization': 0.0} | cost=0.001007
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:56370 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 95.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.74% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.048% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00957, 'utilization': 0.0} | cost=0.002392
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.066% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.013282, 'utilization': 0.0} | cost=0.003321
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:46340->10.0.0.2:5001 type=ECG criticality=5 selected=(1, 2, 4) reason=selected lowest-cost safe path with 27.95% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.37% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000181, 'utilization': 0.0} | cost=0.000045
+PATH 4->3->1 | latency=0.000 ms jitter=0.007 ms loss=0.019% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.000134, 'loss': 0.003895, 'utilization': 0.0} | cost=0.001007
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:46340 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 95.51% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.74% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.075% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.014947, 'utilization': 0.0} | cost=0.003737
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.107% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.021454, 'utilization': 0.0} | cost=0.005364
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 30.33% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.40% protected_change=0.27% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.1 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.075% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.014947, 'utilization': 0.0} | cost=0.003737
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.107% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.021454, 'utilization': 0.0} | cost=0.005364
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 30.33% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.40% protected_change=0.27% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.3 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.075% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.014947, 'utilization': 0.0} | cost=0.003737
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.107% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.021454, 'utilization': 0.0} | cost=0.005364
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 30.33% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.40% protected_change=0.27% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.3 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.075% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.014947, 'utilization': 0.0} | cost=0.003737
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.107% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.021454, 'utilization': 0.0} | cost=0.005364
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 30.33% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.40% protected_change=0.27% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000282, 'utilization': 0.0} | cost=0.000071
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 6e-06, 'loss': 0.0, 'utilization': 0.0} | cost=0.000001
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 97.88% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.79% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.4 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000282, 'utilization': 0.0} | cost=0.000071
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 6e-06, 'loss': 0.0, 'utilization': 0.0} | cost=0.000001
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 97.88% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.79% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.2 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000282, 'utilization': 0.0} | cost=0.000071
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 6e-06, 'loss': 0.0, 'utilization': 0.0} | cost=0.000001
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 97.88% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.79% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s3 -> port 1 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.4 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000282, 'utilization': 0.0} | cost=0.000071
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 6e-06, 'loss': 0.0, 'utilization': 0.0} | cost=0.000001
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 97.88% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.79% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.018% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.003577, 'utilization': 0.0} | cost=0.000894
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.016% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.003295, 'utilization': 0.0} | cost=0.000824
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:56370->10.0.0.2:5001 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 7.89% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=2.79% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000282, 'utilization': 0.0} | cost=0.000071
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 6e-06, 'loss': 0.0, 'utilization': 0.0} | cost=0.000001
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:56370 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 97.88% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.79% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.018% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.003577, 'utilization': 0.0} | cost=0.000894
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.016% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.003295, 'utilization': 0.0} | cost=0.000824
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:46340->10.0.0.2:5001 type=ECG criticality=5 selected=(1, 3, 4) reason=selected lowest-cost safe path with 7.89% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=1.39% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.001% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.000282, 'utilization': 0.0} | cost=0.000071
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 6e-06, 'loss': 0.0, 'utilization': 0.0} | cost=0.000001
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:46340 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 97.88% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=2.79% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002689, 'utilization': 0.0} | cost=0.000672
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005542, 'utilization': 0.0} | cost=0.001385
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 51.47% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.44% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.4 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002689, 'utilization': 0.0} | cost=0.000672
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005542, 'utilization': 0.0} | cost=0.001385
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 51.47% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.44% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.2 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002689, 'utilization': 0.0} | cost=0.000672
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005542, 'utilization': 0.0} | cost=0.001385
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 51.47% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.44% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.4 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002689, 'utilization': 0.0} | cost=0.000672
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005542, 'utilization': 0.0} | cost=0.001385
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 51.47% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.44% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.087% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.017387, 'utilization': 0.0} | cost=0.004347
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.101% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.020237, 'utilization': 0.0} | cost=0.005059
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:56370->10.0.0.2:5001 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 14.08% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.44% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002689, 'utilization': 0.0} | cost=0.000672
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005542, 'utilization': 0.0} | cost=0.001385
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:56370 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 51.47% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.44% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.087% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.017387, 'utilization': 0.0} | cost=0.004347
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.101% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.020237, 'utilization': 0.0} | cost=0.005059
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:46340->10.0.0.2:5001 type=ECG criticality=5 selected=(1, 2, 4) reason=selected lowest-cost safe path with 14.08% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.22% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.013% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002689, 'utilization': 0.0} | cost=0.000672
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.028% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.005542, 'utilization': 0.0} | cost=0.001385
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:46340 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 51.47% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.44% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00278, 'utilization': 0.0} | cost=0.000695
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.006% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00114, 'utilization': 0.0} | cost=0.000285
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 58.98% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=1.69% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s3 -> port 2 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.1 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00278, 'utilization': 0.0} | cost=0.000695
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.006% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00114, 'utilization': 0.0} | cost=0.000285
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 58.98% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=1.69% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s3 -> port 2 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.3 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00278, 'utilization': 0.0} | cost=0.000695
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.006% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00114, 'utilization': 0.0} | cost=0.000285
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 58.98% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=1.69% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 4 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s3 -> port 2 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.3 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00278, 'utilization': 0.0} | cost=0.000695
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.006% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.00114, 'utilization': 0.0} | cost=0.000285
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 3, 4) reason=selected lowest-cost safe path with 58.98% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=1.69% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.1 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.018061, 'utilization': 0.0} | cost=0.004515
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.099% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.019794, 'utilization': 0.0} | cost=0.004948
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 8.75% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.24% protected_change=0.22% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.1 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.1 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.018061, 'utilization': 0.0} | cost=0.004515
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.099% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.019794, 'utilization': 0.0} | cost=0.004948
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.1:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 8.75% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.24% protected_change=0.22% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.2
+Installed flow on s4 -> port 1 for 10.0.0.3 -> 10.0.0.2
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.018061, 'utilization': 0.0} | cost=0.004515
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.099% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.019794, 'utilization': 0.0} | cost=0.004948
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.2:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 8.75% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.24% protected_change=0.22% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s1 -> port 3 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s2 -> port 2 for 10.0.0.3 -> 10.0.0.4
+Installed flow on s4 -> port 2 for 10.0.0.3 -> 10.0.0.4
+PATH 1->2->4 | latency=0.000 ms jitter=0.000 ms loss=0.090% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.018061, 'utilization': 0.0} | cost=0.004515
+PATH 1->3->4 | latency=0.000 ms jitter=0.000 ms loss=0.099% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.019794, 'utilization': 0.0} | cost=0.004948
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.3:0->10.0.0.4:0 type=UNKNOWN criticality=0 selected=(1, 2, 4) reason=selected lowest-cost safe path with 8.75% improvement
+BRAESS path=(1, 2, 4) status=SAFE aggregate_change=0.24% protected_change=0.22% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(1, 3, 4) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.060% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.012011, 'utilization': 0.0} | cost=0.003003
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002799, 'utilization': 0.0} | cost=0.000700
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 76.70% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.4 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.060% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.012011, 'utilization': 0.0} | cost=0.003003
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002799, 'utilization': 0.0} | cost=0.000700
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 76.70% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.2 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.060% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.012011, 'utilization': 0.0} | cost=0.003003
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002799, 'utilization': 0.0} | cost=0.000700
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 76.70% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s3 -> port 1 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.4 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.060% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.012011, 'utilization': 0.0} | cost=0.003003
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002799, 'utilization': 0.0} | cost=0.000700
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 76.70% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.060% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.012011, 'utilization': 0.0} | cost=0.003003
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002799, 'utilization': 0.0} | cost=0.000700
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:56370 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 76.70% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 4 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s3 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.060% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.012011, 'utilization': 0.0} | cost=0.003003
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.014% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.002799, 'utilization': 0.0} | cost=0.000700
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:46340 type=UNKNOWN criticality=0 selected=(4, 3, 1) reason=selected lowest-cost safe path with 76.70% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.33% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.088% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.017666, 'utilization': 0.0} | cost=0.004416
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 100.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.38% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.4 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.088% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.017666, 'utilization': 0.0} | cost=0.004416
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.1:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 100.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.38% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.2 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.088% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.017666, 'utilization': 0.0} | cost=0.004416
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 100.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.38% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s2 -> port 1 for 10.0.0.4 -> 10.0.0.3
+Installed flow on s1 -> port 2 for 10.0.0.4 -> 10.0.0.3
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.088% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.017666, 'utilization': 0.0} | cost=0.004416
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.4:0->10.0.0.3:0 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 100.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.38% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.088% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.017666, 'utilization': 0.0} | cost=0.004416
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:56370 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 100.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.38% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+Installed flow on s4 -> port 3 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s2 -> port 1 for 10.0.0.2 -> 10.0.0.1
+Installed flow on s1 -> port 1 for 10.0.0.2 -> 10.0.0.1
+PATH 4->2->1 | latency=0.000 ms jitter=0.000 ms loss=0.000% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.0, 'utilization': 0.0} | cost=0.000000
+PATH 4->3->1 | latency=0.000 ms jitter=0.000 ms loss=0.088% utilization=0.000% | normalized={'latency': 0.0, 'jitter': 0.0, 'loss': 0.017666, 'utilization': 0.0} | cost=0.004416
+MEDROUTE QOS/BRAESS DECISION flow=10.0.0.2:5001->10.0.0.1:46340 type=UNKNOWN criticality=0 selected=(4, 2, 1) reason=selected lowest-cost safe path with 100.00% improvement
+BRAESS path=(4, 2, 1) status=SAFE aggregate_change=0.38% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+BRAESS path=(4, 3, 1) status=SAFE aggregate_change=0.00% protected_change=0.00% reason=projected state stays within utilization, protected-flow, and aggregate limits
+TELEMETRY STATUS READY complete=8/8; measured QoS/Braess routing enabled
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(1, 3), (2, 4), (3, 1), (3, 4), (4, 3), (4, 2)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(1, 3), (2, 4), (3, 1), (3, 4), (4, 3), (4, 2)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(1, 3), (3, 1), (3, 4), (4, 3)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(1, 3), (3, 1), (3, 4), (4, 3)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(3, 4), (4, 3)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: [(3, 4), (4, 3)]
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: []
+Discovered switches: [1, 2, 3, 4]
+Discovered directed links: []
+TELEMETRY STATUS WARMUP complete=0/0 missing=[] counters={'registered_links': 0, 'measured_links': 0, 'complete_links': 0, 'port_rates': 16, 'lldp_links': 0, 'echo_switches': 4}

@@ -17,5 +17,5 @@ export MEDROUTE_MODE="${MEDROUTE_MODE:-medroute}"
 ryu-manager --observe-links medroute_controller.py 2>&1 | tee results/controller-demo.log &
 CONTROLLER_PID=$!
 sleep 4
-sudo -E "${VIRTUAL_ENV}/bin/python" hospital_topology.py --scenario "${1:-normal}"
+sudo -E /usr/bin/python3 hospital_topology.py --scenario "${1:-normal}"
 
