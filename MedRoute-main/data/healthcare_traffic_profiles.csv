@@ -1,0 +1,7 @@
+traffic_type,criticality,transport_protocol,destination_port,offered_rate_bps,packet_size_bytes,duration_seconds,source_role,destination_role,workload_rationale
+ECG,5,UDP,5001,500000,256,60,bedside monitor,clinical gateway,Steady low-volume waveform metadata workload assumption
+ICU,5,UDP,5002,1000000,512,60,ICU monitor,ICU monitoring station,Continuous vital-sign and alarm metadata workload assumption
+TELEMEDICINE,4,UDP,5003,4000000,1200,60,consultation endpoint,remote clinician endpoint,Interactive media metadata workload assumption
+EHR,4,UDP,5004,1000000,1024,30,clinical workstation,EHR service,Transactional record-transfer metadata workload assumption
+IMAGING,3,UDP,5005,20000000,1200,30,imaging modality,image archive,High-rate bulk-transfer metadata workload assumption
+CCTV,1,UDP,5006,8000000,1200,60,surveillance camera,video recorder,Routine video-stream metadata workload assumption
