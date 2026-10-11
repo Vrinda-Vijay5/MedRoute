@@ -14,7 +14,10 @@ import sqlite3
 import time
 from pathlib import Path
 
-from experiment_runner import parse_iperf_udp_report, parse_ping
+from experiment_runner import (
+    _command_version, _source_revision, parse_iperf_udp_report, parse_ping,
+)
+import platform
 from storage import ResultsStore
 from braess_config import (
     ECG_RATE_BPS,
@@ -177,93 +180,14 @@ def _latest_selected_path(
     return path
 
 
-def _output_port(net, node_name: str, next_name: str) -> int:
-    node = net[node_name]
-    neighbor = net[next_name]
-    links = net.linksBetween(node, neighbor)
-    if len(links) != 1:
-        raise RuntimeError(
-            "expected one link between {} and {}, found {}".format(
-                node_name, next_name, len(links)
-            )
+def _capture_flow_tables(net):
+    """Read switch state for evidence; never install or alter a rule here."""
+    return {
+        switch.name: switch.cmd(
+            "ovs-ofctl -O OpenFlow13 dump-flows {} 2>&1".format(switch.name)
         )
-    link = links[0]
-    interface = link.intf1 if link.intf1.node is node else link.intf2
-    return int(node.ports[interface])
-
-
-def _measurement_cookie(started_at: float) -> int:
-    """Return a trial-unique cookie in MedRoute's experiment namespace."""
-    return 0x4D52000000000000 | (
-        int(started_at * 1_000_000) & 0x0000FFFFFFFFFFFF
-    )
-
-
-def _remove_icmp_measurement_path(
-    net, switch_names, cookie: int, strict: bool = True,
-) -> None:
-    errors = []
-    for switch_name in sorted(set(switch_names)):
-        result = net[switch_name].cmd(
-            "ovs-ofctl -O OpenFlow13 del-flows {switch} "
-            "'cookie={cookie:#x}/0xffffffffffffffff' 2>&1".format(
-                switch=switch_name, cookie=cookie,
-            )
-        ).strip()
-        if result:
-            errors.append("{}: {}".format(switch_name, result))
-    if errors and strict:
-        raise RuntimeError(
-            "could not remove temporary ICMP measurement rules: {}".format(
-                "; ".join(errors)
-            )
-        )
-
-
-def _install_icmp_measurement_path(
-    net, path, source_host: str, destination_host: str, cookie: int,
-):
-    """Pin only the latency probe to the controller-selected UDP path."""
-    source_ip = net[source_host].IP()
-    destination_ip = net[destination_host].IP()
-    installed_switches = set()
-    directions = (
-        (tuple(path), destination_host, source_ip, destination_ip),
-        (tuple(reversed(path)), source_host, destination_ip, source_ip),
-    )
-    try:
-        for switch_path, egress_host, match_source, match_destination in directions:
-            for index, dpid in enumerate(switch_path):
-                switch_name = "s{}".format(dpid)
-                next_name = (
-                    "s{}".format(switch_path[index + 1])
-                    if index + 1 < len(switch_path)
-                    else egress_host
-                )
-                output_port = _output_port(net, switch_name, next_name)
-                result = net[switch_name].cmd(
-                    "ovs-ofctl -O OpenFlow13 add-flow {switch} "
-                    "'cookie={cookie:#x},idle_timeout=5,hard_timeout=10,"
-                    "priority=300,dl_type=0x0800,nw_proto=1,"
-                    "nw_src={source},nw_dst={destination},"
-                    "actions=output:{port}' 2>&1".format(
-                        switch=switch_name, cookie=cookie, source=match_source,
-                        destination=match_destination, port=output_port,
-                    )
-                ).strip()
-                if result:
-                    raise RuntimeError(
-                        "could not install ICMP measurement rule on {}: {}".format(
-                            switch_name, result
-                        )
-                    )
-                installed_switches.add(switch_name)
-    except Exception:
-        _remove_icmp_measurement_path(
-            net, installed_switches, cookie, strict=False
-        )
-        raise
-    return tuple(sorted(installed_switches))
+        for switch in net.switches
+    }
 
 
 def _prepare_trial_topology(
@@ -296,15 +220,24 @@ def measure(
     duration: int,
     controller_log: str | Path,
     database_path: str | Path = "results/medroute.db",
+    run_id: str = "manual-braess",
+    trial_index: int = 1,
 ) -> Path:
     from braess_topology import create_braess_network, set_candidate_link
     # Every trial begins with the candidate down. The final topology must have
     # complete measured telemetry before the comparable traffic window starts.
     net = create_braess_network(candidate_link_up=False)
     started = time.time()
+    root = Path(__file__).resolve().parent
+    revision = _source_revision(root)
+    versions = {
+        "python": platform.python_version(),
+        "iperf3": _command_version(["iperf3", "--version"]),
+        "ovs": _command_version(["ovs-vsctl", "--version"]),
+        "mininet": _command_version(["mn", "--version"]),
+        "ryu": _command_version(["ryu-manager", "--version"]),
+    }
     child_processes = []
-    probe_cookie = _measurement_cookie(started)
-    probe_switches = ()
     try:
         net.start()
         _prepare_trial_topology(
@@ -363,17 +296,16 @@ def measure(
         selected_ecg_path = _latest_selected_path(
             database_path, "10.0.0.1", "10.0.0.4", "ECG", started
         )
-        probe_switches = _install_icmp_measurement_path(
-            net, selected_ecg_path, "h1", "h4", probe_cookie
-        )
-        try:
-            ping_output = net["h1"].cmd("ping -c 10 -i 0.2 10.0.0.4")
-        finally:
-            _remove_icmp_measurement_path(
-                net, probe_switches, probe_cookie
-            )
-            probe_switches = ()
+        # The controller owns ICMP forwarding as it does every other path.
+        # Attribute its RTT to the healthcare path only when the controller's
+        # recorded ICMP switch path actually equals the ECG switch path.
+        ping_started = time.time()
+        ping_output = net["h1"].cmd("ping -c 10 -i 0.2 10.0.0.4")
         ping = parse_ping(ping_output)
+        latency_probe_path = _latest_selected_path(
+            database_path, "10.0.0.1", "10.0.0.4", "UNKNOWN", ping_started
+        )
+        latency_correlated = latency_probe_path == selected_ecg_path
         # wait is executed by the same persistent Mininet host shell that
         # launched the job, so completion, output flushing, and reaping happen
         # before the JSON and exit-status files are inspected.
@@ -382,6 +314,8 @@ def measure(
             net["h1"], protected_output, protected_error, protected_status
         )
         record = {
+            "run_id": run_id,
+            "trial_index": trial_index,
             "label": label,
             "candidate_link": "up" if candidate_enabled else "down",
             "routing_mode": routing_mode,
@@ -400,40 +334,46 @@ def measure(
                 },
                 "inter_switch_capacity_bps": INTERSWITCH_CAPACITY_BPS,
                 "inter_switch_capacity_mbps": INTERSWITCH_CAPACITY_MBPS,
-                "latency_probe_path": list(selected_ecg_path),
-                "latency_probe_method": "ICMP RTT pinned to selected ECG switch path",
+                "latency_probe_path": list(latency_probe_path),
+                "latency_probe_matches_ecg_path": latency_correlated,
+                "latency_probe_method": "controller-routed ICMP RTT; accepted only when switch path matches ECG",
             },
             "started_at": started,
+            "source_revision": revision,
+            "versions": versions,
             "finished_at": time.time(),
             "ping_output": ping_output,
             "ping": ping,
             "iperf": iperf_report,
+            "selected_ecg_path": list(selected_ecg_path),
+            "switch_flow_tables": _capture_flow_tables(net),
         }
         raw_directory = Path("results/raw")
         raw_directory.mkdir(parents=True, exist_ok=True)
-        raw_path = raw_directory / "{}-braess-{}-{}.json".format(int(started), label, routing_mode)
+        raw_path = raw_directory / "{}-{}-t{}-braess-{}-{}.json".format(
+            int(started), run_id, trial_index, label, routing_mode
+        )
         raw_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
         store = ResultsStore(database_path)
         store.record_experiment({
             "scenario": "braess_{}".format(label), "routing_mode": routing_mode,
-            "traffic_type": "ECG", "latency_ms": ping["latency_ms"],
+            "traffic_type": "ECG",
+            "latency_ms": ping["latency_ms"] if latency_correlated else None,
             "jitter_ms": iperf["jitter_ms"], "packet_loss_pct": iperf["packet_loss_pct"],
             "throughput_bps": iperf["throughput_bps"],
             "selected_path_json": json.dumps(list(selected_ecg_path)),
             "notes": "candidate_link={}; load={}x{}bps_IMAGING; capacity={}M; "
-                     "latency=ICMP_RTT_pinned_to_ECG_path; raw evidence={}".format(
+                     "latency=controller_ICMP_path_match_{}; raw evidence={}".format(
                 "up" if candidate_enabled else "down",
                 len(IMAGING_FLOW_PAIRS), IMAGING_RATE_BPS,
-                INTERSWITCH_CAPACITY_MBPS, raw_path
+                INTERSWITCH_CAPACITY_MBPS, latency_correlated, raw_path
             ),
+            "run_id": run_id, "raw_path": str(raw_path), "revision": revision,
+            "versions_json": json.dumps(versions, sort_keys=True),
         })
         store.close()
         return raw_path
     finally:
-        if probe_switches:
-            _remove_icmp_measurement_path(
-                net, probe_switches, probe_cookie, strict=False
-            )
         for host, pid in reversed(child_processes):
             _stop_child(host, pid)
         net.stop()
@@ -447,9 +387,11 @@ if __name__ == "__main__":
     parser.add_argument("--duration", type=int, default=10)
     parser.add_argument("--controller-log", required=True)
     parser.add_argument("--database", default="results/medroute.db")
+    parser.add_argument("--run-id", default="manual-braess")
+    parser.add_argument("--trial-index", type=int, default=1)
     args = parser.parse_args()
     result = measure(
         args.label, args.candidate_link == "up", args.routing_mode, args.duration,
-        args.controller_log, args.database,
+        args.controller_log, args.database, args.run_id, args.trial_index,
     )
     print("Braess trial evidence written to {}".format(result))

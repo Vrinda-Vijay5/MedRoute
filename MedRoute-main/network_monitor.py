@@ -67,11 +67,16 @@ class TelemetryReadiness:
 class NetworkMonitor:
     DEFAULT_CAPACITY_BPS = 100_000_000.0
 
-    def __init__(self, stale_after_seconds: float = 10.0) -> None:
+    def __init__(
+        self, stale_after_seconds: float = 10.0,
+        max_counter_skew_seconds: float = 3.0,
+    ) -> None:
         self.stale_after_seconds = stale_after_seconds
+        self.max_counter_skew_seconds = max_counter_skew_seconds
         self._lock = threading.RLock()
         self._links: Dict[Edge, Tuple[int, int]] = {}
         self._capacities: Dict[Tuple[int, int], float] = {}
+        self._capacity_sources: Dict[Tuple[int, int], str] = {}
         self._configured_capacities = set()
         self._counters: Dict[Tuple[int, int], CounterSample] = {}
         self._rates: Dict[Tuple[int, int], PortRate] = {}
@@ -81,6 +86,8 @@ class NetworkMonitor:
         self._metrics: Dict[Edge, LinkMetrics] = {}
         self._echo_rtt_ms: Dict[int, float] = {}
         self._echo_timestamps: Dict[int, float] = {}
+        self._counter_resets = 0
+        self._skew_rejections = 0
 
     def register_link(
         self, source: int, destination: int, source_port: int, destination_port: int,
@@ -96,9 +103,11 @@ class NetworkMonitor:
                 if capacity_bps <= 0:
                     raise ValueError("link capacity must be positive")
                 self._capacities[capacity_key] = float(capacity_bps)
+                self._capacity_sources[capacity_key] = "configured-testbed"
                 self._configured_capacities.add(capacity_key)
             else:
                 self._capacities.setdefault(capacity_key, self.DEFAULT_CAPACITY_BPS)
+                self._capacity_sources.setdefault(capacity_key, "default-fallback")
 
     def remove_missing_links(self, active_edges: Iterable[Edge]) -> None:
         active = {(int(source), int(destination)) for source, destination in active_edges}
@@ -108,6 +117,7 @@ class NetworkMonitor:
                 if ports is not None:
                     capacity_key = (edge[0], ports[0])
                     self._capacities.pop(capacity_key, None)
+                    self._capacity_sources.pop(capacity_key, None)
                     self._configured_capacities.discard(capacity_key)
                 self._metrics.pop(edge, None)
                 self._delay_ms.pop(edge, None)
@@ -121,6 +131,7 @@ class NetworkMonitor:
             key = (int(dpid), int(port_no))
             if key not in self._configured_capacities:
                 self._capacities[key] = capacity_bps
+                self._capacity_sources[key] = "openflow-port-description"
 
     def record_echo_rtt(
         self, dpid: int, rtt_ms: float, timestamp: Optional[float] = None
@@ -186,12 +197,24 @@ class NetworkMonitor:
                 elapsed = sample.timestamp - previous.timestamp
                 if elapsed <= 0:
                     continue
+                deltas = (
+                    sample.tx_bytes - previous.tx_bytes,
+                    sample.rx_bytes - previous.rx_bytes,
+                    sample.tx_packets - previous.tx_packets,
+                    sample.rx_packets - previous.rx_packets,
+                )
+                if any(delta < 0 for delta in deltas):
+                    # Switch reconnects and counter wrap/reset are not zero
+                    # traffic. Discard this interval and wait for a new pair.
+                    self._rates.pop(key, None)
+                    self._counter_resets += 1
+                    continue
                 self._rates[key] = PortRate(
                     timestamp=measured_at,
-                    tx_bps=max(0.0, (sample.tx_bytes - previous.tx_bytes) * 8.0 / elapsed),
-                    rx_bps=max(0.0, (sample.rx_bytes - previous.rx_bytes) * 8.0 / elapsed),
-                    tx_pps=max(0.0, (sample.tx_packets - previous.tx_packets) / elapsed),
-                    rx_pps=max(0.0, (sample.rx_packets - previous.rx_packets) / elapsed),
+                    tx_bps=deltas[0] * 8.0 / elapsed,
+                    rx_bps=deltas[1] * 8.0 / elapsed,
+                    tx_pps=deltas[2] / elapsed,
+                    rx_pps=deltas[3] / elapsed,
                 )
             self._recalculate_links(measured_at)
 
@@ -202,6 +225,12 @@ class NetworkMonitor:
             destination_rate = self._rates.get((edge[1], destination_port))
             capacity = self._capacities.get((edge[0], source_port), self.DEFAULT_CAPACITY_BPS)
             if source_rate is None or destination_rate is None:
+                continue
+            if abs(source_rate.timestamp - destination_rate.timestamp) > self.max_counter_skew_seconds:
+                # Directional loss/goodput is invalid when the two counter
+                # windows do not describe approximately the same interval.
+                self._metrics.pop(edge, None)
+                self._skew_rejections += 1
                 continue
             throughput = min(source_rate.tx_bps, destination_rate.rx_bps)
             utilization = min(100.0, 100.0 * source_rate.tx_bps / max(capacity, 1.0))
@@ -220,10 +249,13 @@ class NetworkMonitor:
                 throughput_bps=throughput,
                 available_bandwidth_bps=max(0.0, capacity - source_rate.tx_bps),
                 capacity_bps=capacity,
+                capacity_source=self._capacity_sources.get(
+                    (edge[0], source_port), "default-fallback"
+                ),
                 # The oldest contributor determines freshness. Repeated port
                 # statistics cannot make an old LLDP observation look fresh.
                 timestamp=min(contributing_timestamps),
-                sample_source="openflow-port-stats+corrected-lldp",
+                sample_source="openflow-port-stats(directional-estimate)+corrected-lldp",
             )
 
     def snapshot(self, include_stale: bool = False, now: Optional[float] = None) -> Dict[Edge, LinkMetrics]:
@@ -258,6 +290,14 @@ class NetworkMonitor:
                             reasons.append("{}_port_rate_missing_second_sample".format(label))
                         elif clock - rate.timestamp > self.stale_after_seconds:
                             reasons.append("{}_port_rate_stale".format(label))
+                    source_rate = self._rates.get(source_key)
+                    destination_rate = self._rates.get(destination_key)
+                    if (
+                        source_rate is not None and destination_rate is not None
+                        and abs(source_rate.timestamp - destination_rate.timestamp)
+                        > self.max_counter_skew_seconds
+                    ):
+                        reasons.append("port_counter_windows_skewed")
                 for label, dpid in (("source", edge[0]), ("destination", edge[1])):
                     if dpid not in self._echo_rtt_ms:
                         reasons.append("{}_echo_rtt_missing".format(label))
@@ -288,4 +328,6 @@ class NetworkMonitor:
             complete = sum(metric.complete for metric in self._metrics.values())
             return {"registered_links": len(self._links), "measured_links": len(self._metrics),
                     "complete_links": complete, "port_rates": len(self._rates),
-                    "lldp_links": len(self._delay_ms), "echo_switches": len(self._echo_rtt_ms)}
+                    "lldp_links": len(self._delay_ms), "echo_switches": len(self._echo_rtt_ms),
+                    "counter_resets": self._counter_resets,
+                    "skew_rejections": self._skew_rejections}

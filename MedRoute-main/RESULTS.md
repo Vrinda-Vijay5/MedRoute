@@ -1,5 +1,18 @@
 # Experimental evidence status
 
+## Post-implementation evidence boundary (11 October 2026)
+
+No old raw JSON, SQLite database, controller log, plot, trial configuration, or
+flow-table dump was present in the supplied checkout. The Review-2 figures
+(42/13 ms latency, 64/91 Mb/s throughput, 8.4/0.2% loss and 11.2/1.8 ms
+jitter) therefore remain unverified; this statement does not infer how they
+were produced.
+
+The revised runners assign every new execution a `run_id`, trial index, raw
+path, source SHA-256 and tool-version record. New results are new evidence and
+must not be described as proof of the old slides. This Codex session could not
+enter WSL (`E_ACCESSDENIED`), so it produced no new Mininet result rows.
+
 ## Dedicated Braess trials reported from WSL by the project owner
 
 The following are the owner's latest reported measurements, not a rerun in

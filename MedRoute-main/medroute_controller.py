@@ -24,6 +24,10 @@ from ryu.topology.api import get_link, get_switch
 from ryu.topology.switches import LLDPPacket
 
 from braess_validator import ActiveFlow
+from flow_lifecycle import (
+    COOKIE_NAMESPACE, COOKIE_NAMESPACE_MASK, build_rule_plan, make_cookie,
+    path_contains_any_edge, reverse_transport_ports,
+)
 from healthcare_data import SyntheticHealthcareDataSource
 from network_monitor import NetworkMonitor, find_lldp_send_timestamp
 from routing_engine import RoutingDecision, RoutingEngine
@@ -47,6 +51,13 @@ class ManagedFlow:
     expected_rate_bps: float
     path: Tuple[int, ...]
     last_change_at: float
+    route_version: int
+    forward_cookie: int
+    reverse_cookie: int
+    last_activity_at: float
+    source_id: Optional[str] = None
+    observed_rate_bps: float = 0.0
+    observed_rate_at: float = 0.0
 
 
 class MedRouteController(app_manager.RyuApp):
@@ -54,6 +65,8 @@ class MedRouteController(app_manager.RyuApp):
     MONITOR_INTERVAL = 2.0
     REEVALUATE_INTERVAL = 6.0
     TELEMETRY_LOG_INTERVAL = 10.0
+    FLOW_IDLE_TIMEOUT = 20
+    FLOW_STATE_TIMEOUT = 45.0
 
     def __init__(self, *args, **kwargs):
         super(MedRouteController, self).__init__(*args, **kwargs)
@@ -68,6 +81,7 @@ class MedRouteController(app_manager.RyuApp):
         self.mac_to_port: Dict[int, Dict[str, int]] = {}
         self.datapaths = {}
         self.managed_flows: Dict[str, ManagedFlow] = {}
+        self._rule_counters = {}
         self.classifier = HealthcareTrafficClassifier()
         self.monitor = NetworkMonitor()
         self.router = RoutingEngine()
@@ -84,6 +98,11 @@ class MedRouteController(app_manager.RyuApp):
         self._last_telemetry_log = 0.0
         self._last_telemetry_signature = None
         self._flow_decision_stage: Dict[str, str] = {}
+        self._pending_post_action = {}
+        self.store.record_status(
+            "controller", "starting", self.routing_mode, "measured",
+            {"message": "waiting for OpenFlow switches"},
+        )
         self._monitor_thread = hub.spawn(self._monitor_loop)
         self.logger.info(
             "MedRoute controller started in %s mode; evidence=%s; link_capacity_bps=%s",
@@ -108,13 +127,21 @@ class MedRouteController(app_manager.RyuApp):
             self.datapaths[datapath.id] = datapath
         elif ev.state == DEAD_DISPATCHER:
             self.datapaths.pop(datapath.id, None)
+            affected = [
+                flow.flow_id for flow in self.managed_flows.values()
+                if datapath.id in flow.path
+            ]
+            for flow_id in affected:
+                self._remove_managed_flow(flow_id, "switch s{} disconnected".format(datapath.id))
 
-    def add_flow(self, datapath, priority, match, actions, idle_timeout=0, hard_timeout=0):
+    def add_flow(self, datapath, priority, match, actions, idle_timeout=0, hard_timeout=0,
+                 cookie=0, flags=0):
         parser = datapath.ofproto_parser
         instructions = [parser.OFPInstructionActions(datapath.ofproto.OFPIT_APPLY_ACTIONS, actions)]
         datapath.send_msg(parser.OFPFlowMod(
             datapath=datapath, priority=priority, match=match, instructions=instructions,
             idle_timeout=idle_timeout, hard_timeout=hard_timeout,
+            cookie=cookie, flags=flags,
         ))
 
     @set_ev_cls(event.EventSwitchEnter)
@@ -124,6 +151,7 @@ class MedRouteController(app_manager.RyuApp):
         self.update_topology()
 
     def update_topology(self):
+        previous_edges = set(self.net.edges())
         switch_list = get_switch(self, None)
         link_list = get_link(self, None)
         graph = nx.DiGraph()
@@ -151,6 +179,13 @@ class MedRouteController(app_manager.RyuApp):
         self.link_ports = link_ports
         self.switch_ports = switch_ports
         self.monitor.remove_missing_links(graph.edges())
+        self.store.replace_topology([
+            (source, destination, ports[0], ports[1])
+            for (source, destination), ports in link_ports.items()
+        ])
+        removed_edges = tuple(sorted(previous_edges.difference(graph.edges())))
+        if removed_edges:
+            self._handle_removed_links(removed_edges)
         self.logger.info("Discovered switches: %s", list(graph.nodes()))
         self.logger.info("Discovered directed links: %s", list(graph.edges()))
 
@@ -158,8 +193,13 @@ class MedRouteController(app_manager.RyuApp):
         previous = self.host_port.get(ip_address)
         self.host_port[ip_address] = (dpid, port_no)
         self.host_mac[ip_address] = mac_address
+        self.store.upsert_host(ip_address, mac_address, dpid, port_no)
         if previous != (dpid, port_no):
             self.logger.info("Host learned: %s (%s) -> s%s port %s", ip_address, mac_address, dpid, port_no)
+            if previous is not None:
+                self._invalidate_host_flows(ip_address, "host moved from {} to {}".format(
+                    previous, (dpid, port_no)
+                ))
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self, ev):
@@ -202,8 +242,23 @@ class MedRouteController(app_manager.RyuApp):
             else self.classifier.classify("UNKNOWN")
         )
         flow_id = build_flow_id(
-            ip_packet.src, ip_packet.dst, source_port, destination_port
+            ip_packet.src, ip_packet.dst, source_port, destination_port,
+            int(ip_packet.proto),
         )
+        live_signal = self.store.resolve_live_criticality(
+            ip_packet.src, ip_packet.dst, int(ip_packet.proto), source_port,
+            destination_port,
+        )
+        source_id = None
+        if live_signal is not None:
+            profile = dict(profile)
+            profile["criticality"] = int(live_signal["criticality"])
+            profile["criticality_source"] = "live-patient-policy"
+            profile["criticality_reason"] = str(live_signal["reason"])
+            source_id = str(live_signal["source_id"])
+        else:
+            profile = dict(profile)
+            profile["criticality_source"] = "network-traffic-policy"
         expected_rate = SyntheticHealthcareDataSource.DEFAULT_RATES.get(
             profile["traffic_type"], 1_000_000
         )
@@ -216,6 +271,7 @@ class MedRouteController(app_manager.RyuApp):
         self._record_and_apply_decision(
             flow_id, ip_packet.src, ip_packet.dst, int(ip_packet.proto),
             source_port, destination_port, profile, expected_rate, decision,
+            source_id=source_id,
         )
         self._packet_out_on_path(msg, decision.selected_path, ip_packet.dst)
 
@@ -230,29 +286,46 @@ class MedRouteController(app_manager.RyuApp):
             flow_rate_bps=expected_rate, last_change_at=last_change_at,
         )
 
-    @staticmethod
-    def _as_active_flow(flow: ManagedFlow) -> ActiveFlow:
+    def _as_active_flow(self, flow: ManagedFlow) -> ActiveFlow:
         return ActiveFlow(flow.flow_id, flow.path, str(flow.profile["traffic_type"]),
-                          int(flow.profile["criticality"]), flow.expected_rate_bps,
+                          int(flow.profile["criticality"]), self._flow_demand(flow),
                           dict(flow.profile["weights"]))
+
+    @staticmethod
+    def _flow_demand(flow: ManagedFlow) -> float:
+        if flow.observed_rate_at > 0 and time.time() - flow.observed_rate_at <= 10.0:
+            return max(0.0, flow.observed_rate_bps)
+        return flow.expected_rate_bps
 
     def _record_and_apply_decision(
         self, flow_id, source_ip, destination_ip, ip_protocol, source_port,
         destination_port, profile, expected_rate, decision: RoutingDecision,
+        source_id=None,
     ):
         now = time.time()
         old = self.managed_flows.get(flow_id)
         last_change = now if decision.changed or old is None else old.last_change_at
-        self.install_path(
-            decision.selected_path, source_ip, destination_ip, ip_protocol,
-            source_port, destination_port, int(profile["criticality"]),
+        route_version = (old.route_version + 1) if old else 1
+        forward_cookie = make_cookie(flow_id, route_version, "forward")
+        reverse_cookie = make_cookie(flow_id, route_version, "reverse")
+        self.install_bidirectional_path(
+            flow_id, decision.selected_path, source_ip, destination_ip,
+            ip_protocol, source_port, destination_port,
+            int(profile["criticality"]), route_version, forward_cookie,
+            reverse_cookie, "initial" if old is None else "route update",
         )
+        if old is not None:
+            self._delete_version_rules(old, "superseded by route version {}".format(route_version))
         self.managed_flows[flow_id] = ManagedFlow(
             flow_id, source_ip, destination_ip, ip_protocol, source_port,
-            destination_port, dict(profile), expected_rate, decision.selected_path, last_change,
+            destination_port, dict(profile), expected_rate, decision.selected_path,
+            last_change, route_version, forward_cookie, reverse_cookie, now,
+            source_id, old.observed_rate_bps if old else 0.0,
+            old.observed_rate_at if old else 0.0,
         )
         self.store.upsert_flow(flow_id, str(profile["traffic_type"]), int(profile["criticality"]),
-                               source_ip, destination_ip, expected_rate, now)
+                               source_ip, destination_ip, expected_rate, now,
+                               ip_protocol, source_port, destination_port, source_id)
         braess_by_path = dict(decision.braess_results)
         for evaluation in decision.evaluations:
             self.store.record_evaluation(flow_id, evaluation, braess_by_path.get(evaluation.path))
@@ -282,29 +355,136 @@ class MedRouteController(app_manager.RyuApp):
             self.logger.info("BRAESS path=%s status=%s aggregate_change=%.2f%% protected_change=%.2f%% reason=%s",
                              path, result.status, result.aggregate_change_pct,
                              result.worst_protected_change_pct, result.reason)
+        selected_safety = dict(decision.braess_results).get(decision.selected_path)
+        if old is not None and decision.changed and selected_safety is not None:
+            self._pending_post_action[flow_id] = {
+                "due_at": now + 8.0,
+                "path": decision.selected_path,
+                "projected": {
+                    "flow_cost": selected_safety.projected_flow_cost,
+                    "aggregate_cost": selected_safety.aggregate_cost_after,
+                    "max_utilization_pct": selected_safety.max_projected_utilization_pct,
+                    "safety_status": selected_safety.status,
+                },
+            }
 
-    def install_path(
-        self, path, source_ip, destination_ip, ip_protocol, source_port,
-        destination_port, criticality,
+    def install_bidirectional_path(
+        self, flow_id, path, source_ip, destination_ip, ip_protocol, source_port,
+        destination_port, criticality, route_version, forward_cookie,
+        reverse_cookie, reason,
     ):
-        for index, dpid in enumerate(path):
+        reverse_path = tuple(reversed(path))
+        missing_reverse = [
+            edge for edge in zip(reverse_path, reverse_path[1:])
+            if edge not in self.port_map
+        ]
+        if missing_reverse:
+            raise ValueError("reverse path unavailable for edges {}".format(missing_reverse))
+        reverse_source_port, reverse_destination_port = reverse_transport_ports(
+            source_port, destination_port
+        )
+        plans = (
+            (build_rule_plan(
+                path, source_ip, destination_ip, ip_protocol, source_port,
+                destination_port, self.host_port[destination_ip][1], self.port_map,
+                "forward",
+            ), forward_cookie, tuple(path), "forward"),
+            (build_rule_plan(
+                reverse_path, destination_ip, source_ip, ip_protocol,
+                reverse_source_port, reverse_destination_port,
+                self.host_port[source_ip][1], self.port_map, "reverse",
+            ), reverse_cookie, reverse_path, "reverse"),
+        )
+        touched = set()
+        priority = 100 + 10 * criticality
+        for plan, cookie, rule_path, direction in plans:
+            for rule in plan:
+                datapath = self.datapaths.get(rule.dpid)
+                if datapath is None:
+                    raise ValueError("switch s{} is disconnected".format(rule.dpid))
+                match = datapath.ofproto_parser.OFPMatch(**dict(rule.match_fields))
+                actions = [datapath.ofproto_parser.OFPActionOutput(rule.output_port)]
+                self.add_flow(
+                    datapath, priority, match, actions,
+                    idle_timeout=self.FLOW_IDLE_TIMEOUT, cookie=cookie,
+                    flags=datapath.ofproto.OFPFF_SEND_FLOW_REM,
+                )
+                touched.add(rule.dpid)
+                self.store.record_rule_event(
+                    flow_id, "install", rule.dpid, cookie, route_version,
+                    direction, rule.match_fields, rule.output_port, rule_path, reason,
+                )
+        # OpenFlow preserves message order on each switch connection. These
+        # barriers fence each switch's install before obsolete deletion, but
+        # do not make a multi-switch update atomic.
+        for dpid in touched:
             datapath = self.datapaths.get(dpid)
-            if datapath is None:
+            if datapath is not None:
+                datapath.send_msg(datapath.ofproto_parser.OFPBarrierRequest(datapath))
+
+    def _delete_version_rules(self, flow: ManagedFlow, reason: str):
+        for direction, cookie, path in (
+            ("forward", flow.forward_cookie, flow.path),
+            ("reverse", flow.reverse_cookie, tuple(reversed(flow.path))),
+        ):
+            for dpid in set(path):
+                datapath = self.datapaths.get(dpid)
+                if datapath is None:
+                    continue
+                parser = datapath.ofproto_parser
+                datapath.send_msg(parser.OFPFlowMod(
+                    datapath=datapath, cookie=cookie, cookie_mask=0xFFFFFFFFFFFFFFFF,
+                    table_id=datapath.ofproto.OFPTT_ALL,
+                    command=datapath.ofproto.OFPFC_DELETE,
+                    out_port=datapath.ofproto.OFPP_ANY,
+                    out_group=datapath.ofproto.OFPG_ANY,
+                    match=parser.OFPMatch(),
+                ))
+                self.store.record_rule_event(
+                    flow.flow_id, "delete", dpid, cookie, flow.route_version,
+                    direction, {}, None, path, reason,
+                )
+
+    def _remove_managed_flow(self, flow_id: str, reason: str):
+        flow = self.managed_flows.pop(flow_id, None)
+        self._flow_decision_stage.pop(flow_id, None)
+        if flow is None:
+            return
+        self._delete_version_rules(flow, reason)
+        self.store.mark_flow_inactive(flow_id)
+        self.logger.info("Removed managed flow %s: %s", flow_id, reason)
+
+    def _invalidate_host_flows(self, ip_address: str, reason: str):
+        for flow_id, flow in list(self.managed_flows.items()):
+            if ip_address in (flow.source_ip, flow.destination_ip):
+                self._remove_managed_flow(flow_id, reason)
+
+    def _handle_removed_links(self, removed_edges):
+        for flow_id, flow in list(self.managed_flows.items()):
+            if not path_contains_any_edge(flow.path, removed_edges):
                 continue
-            if index == len(path) - 1:
-                out_port = self.host_port[destination_ip][1]
-            else:
-                out_port = self.port_map.get((dpid, path[index + 1]))
-            if out_port is None:
-                continue
-            fields = ipv4_openflow_match_fields(
-                source_ip, destination_ip, ip_protocol, source_port, destination_port
-            )
-            match = datapath.ofproto_parser.OFPMatch(**fields)
-            actions = [datapath.ofproto_parser.OFPActionOutput(out_port)]
-            self.add_flow(datapath, 100 + 10 * criticality, match, actions, idle_timeout=20)
-            self.logger.info("Installed flow on s%s -> port %s for %s -> %s", dpid, out_port,
-                             source_ip, destination_ip)
+            try:
+                replacement = self._make_decision(
+                    flow_id, flow.source_ip, flow.destination_ip,
+                    flow.destination_port, flow.profile, flow.expected_rate_bps,
+                    None, 0.0,
+                )
+                replacement = RoutingDecision(
+                    replacement.selected_path, flow.path, replacement.mode,
+                    "link failure {}: {}".format(removed_edges, replacement.reason),
+                    replacement.evaluations, replacement.braess_results, True,
+                )
+                self._record_and_apply_decision(
+                    flow_id, flow.source_ip, flow.destination_ip, flow.ip_protocol,
+                    flow.source_port, flow.destination_port, flow.profile,
+                    flow.expected_rate_bps, replacement, source_id=flow.source_id,
+                )
+            except (nx.NetworkXNoPath, KeyError, ValueError) as error:
+                self.logger.warning(
+                    "No immediate replacement for %s after %s: %s",
+                    flow_id, removed_edges, error,
+                )
+                self._remove_managed_flow(flow_id, "path invalidated by link failure")
 
     def _packet_out_on_path(self, msg, path, destination_ip):
         dpid = msg.datapath.id
@@ -399,6 +579,11 @@ class MedRouteController(app_manager.RyuApp):
                 datapath.send_msg(parser.OFPPortStatsRequest(datapath, 0, datapath.ofproto.OFPP_ANY))
                 datapath.send_msg(parser.OFPPortDescStatsRequest(datapath, 0))
                 datapath.send_msg(parser.OFPEchoRequest(datapath, data=struct.pack("!d", time.time())))
+                datapath.send_msg(parser.OFPFlowStatsRequest(
+                    datapath, cookie=COOKIE_NAMESPACE,
+                    cookie_mask=COOKIE_NAMESPACE_MASK,
+                    match=parser.OFPMatch(),
+                ))
             now = time.time()
             snapshot = self.monitor.snapshot()
             self._log_telemetry_status(now)
@@ -407,7 +592,56 @@ class MedRouteController(app_manager.RyuApp):
             if now - self._last_reevaluation >= self.REEVALUATE_INTERVAL:
                 self._reevaluate_flows()
                 self._last_reevaluation = now
+            self._expire_inactive_flows(now)
+            self._validate_post_actions(now, snapshot)
+            readiness = self.monitor.readiness(self.net.edges(), now=now)
+            self.store.record_status(
+                "controller", "ready" if self.datapaths else "disconnected",
+                self.routing_mode, "measured",
+                {"switches": sorted(self.datapaths), "managed_flows": len(self.managed_flows),
+                 "telemetry_complete": readiness.complete,
+                 "telemetry_total": readiness.total}, now,
+            )
             hub.sleep(self.MONITOR_INTERVAL)
+
+    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
+    def flow_stats_reply_handler(self, ev):
+        now = time.time()
+        for stat in ev.msg.body:
+            cookie = int(getattr(stat, "cookie", 0))
+            if cookie & COOKIE_NAMESPACE_MASK != COOKIE_NAMESPACE:
+                continue
+            key = (int(ev.msg.datapath.id), cookie)
+            byte_count = int(getattr(stat, "byte_count", 0))
+            previous = self._rule_counters.get(key)
+            self._rule_counters[key] = (byte_count, now)
+            if previous is None or byte_count < previous[0]:
+                continue
+            for flow in self.managed_flows.values():
+                if cookie in (flow.forward_cookie, flow.reverse_cookie):
+                    if byte_count > previous[0]:
+                        flow.last_activity_at = now
+                    if cookie == flow.forward_cookie and ev.msg.datapath.id == flow.path[0]:
+                        elapsed = now - previous[1]
+                        if elapsed > 0:
+                            flow.observed_rate_bps = (
+                                (byte_count - previous[0]) * 8.0 / elapsed
+                            )
+                            flow.observed_rate_at = now
+                            self.store.touch_flow(
+                                flow.flow_id, flow.observed_rate_bps, now
+                            )
+                    break
+
+    @set_ev_cls(ofp_event.EventOFPFlowRemoved, MAIN_DISPATCHER)
+    def flow_removed_handler(self, ev):
+        cookie = int(ev.msg.cookie)
+        if cookie & COOKIE_NAMESPACE_MASK != COOKIE_NAMESPACE:
+            return
+        for flow_id, flow in list(self.managed_flows.items()):
+            if cookie in (flow.forward_cookie, flow.reverse_cookie):
+                self._remove_managed_flow(flow_id, "OpenFlow rule expired or was removed")
+                break
 
     @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
     def port_stats_reply_handler(self, ev):
@@ -469,18 +703,80 @@ class MedRouteController(app_manager.RyuApp):
             if flow.source_ip not in self.host_port or flow.destination_ip not in self.host_port:
                 continue
             try:
+                criticality_changed = self._refresh_live_criticality(flow)
                 decision = self._make_decision(
                     flow_id, flow.source_ip, flow.destination_ip, flow.destination_port,
-                    flow.profile, flow.expected_rate_bps, flow.path, flow.last_change_at,
+                    flow.profile, self._flow_demand(flow), flow.path, flow.last_change_at,
                 )
                 stage_changed = (
                     self._flow_decision_stage.get(flow_id) != self._decision_stage(decision)
                 )
-                if decision.changed or stage_changed:
+                if decision.changed or stage_changed or criticality_changed:
                     self._record_and_apply_decision(
                         flow_id, flow.source_ip, flow.destination_ip, flow.ip_protocol,
                         flow.source_port, flow.destination_port, flow.profile,
                         flow.expected_rate_bps, decision,
+                        source_id=flow.source_id,
                     )
             except (nx.NetworkXNoPath, KeyError, ValueError) as error:
                 self.logger.warning("Could not reevaluate %s: %s", flow_id, error)
+
+    def _refresh_live_criticality(self, flow: ManagedFlow) -> bool:
+        signal = self.store.resolve_live_criticality(
+            flow.source_ip, flow.destination_ip, flow.ip_protocol,
+            flow.source_port, flow.destination_port,
+        )
+        previous = (int(flow.profile["criticality"]), flow.source_id)
+        if signal is None:
+            base = (
+                self.classifier.classify_udp_port(flow.destination_port)
+                if flow.ip_protocol == 17 else self.classifier.classify("UNKNOWN")
+            )
+            base["criticality_source"] = "network-traffic-policy"
+            flow.profile = base
+            flow.source_id = None
+        else:
+            flow.profile["criticality"] = int(signal["criticality"])
+            flow.profile["criticality_source"] = "live-patient-policy"
+            flow.profile["criticality_reason"] = str(signal["reason"])
+            flow.source_id = str(signal["source_id"])
+        return previous != (int(flow.profile["criticality"]), flow.source_id)
+
+    def _expire_inactive_flows(self, now):
+        for flow_id, flow in list(self.managed_flows.items()):
+            if now - flow.last_activity_at > self.FLOW_STATE_TIMEOUT:
+                self._remove_managed_flow(flow_id, "controller inactivity timeout")
+
+    def _validate_post_actions(self, now, snapshot):
+        for flow_id, pending in list(self._pending_post_action.items()):
+            if now < pending["due_at"]:
+                continue
+            flow = self.managed_flows.get(flow_id)
+            if flow is None or tuple(flow.path) != tuple(pending["path"]):
+                self._pending_post_action.pop(flow_id, None)
+                continue
+            try:
+                measured = self.router.calculator.evaluate(
+                    flow.path, snapshot, flow.profile["weights"],
+                    requested_rate_bps=self._flow_demand(flow),
+                ).to_dict()
+                projected_cost = float(pending["projected"]["flow_cost"])
+                measured_cost = float(measured["cost"])
+                relative_error = abs(measured_cost - projected_cost) / max(
+                    abs(projected_cost), 1e-12
+                )
+                measured["relative_cost_error"] = relative_error
+                verdict = "observed_within_25pct" if relative_error <= 0.25 else "observed_diverged"
+                self.store.record_post_action_validation(
+                    flow_id, pending["projected"], measured, verdict
+                )
+                self._pending_post_action.pop(flow_id, None)
+            except (KeyError, ValueError) as error:
+                # Keep the item for one further telemetry interval; after 30s
+                # record the absence instead of inventing a measurement.
+                if now - (pending["due_at"] - 8.0) >= 30.0:
+                    self.store.record_post_action_validation(
+                        flow_id, pending["projected"], {"error": str(error)},
+                        "measurement_unavailable",
+                    )
+                    self._pending_post_action.pop(flow_id, None)

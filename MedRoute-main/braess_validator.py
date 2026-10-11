@@ -44,7 +44,10 @@ class BraessValidator:
     AGGREGATE_TOLERANCE_PCT = 8.0
     MAX_PROJECTED_UTILIZATION_PCT = 95.0
     PROTECTED_TOLERANCE_PCT = {5: 5.0, 4: 10.0, 3: 15.0, 2: 20.0, 1: 25.0, 0: 25.0}
-    NETWORK_WEIGHTS = {"latency": 0.25, "jitter": 0.25, "loss": 0.25, "utilization": 0.25}
+    NETWORK_WEIGHTS = {
+        "latency": 0.20, "jitter": 0.20, "loss": 0.20,
+        "utilization": 0.20, "throughput": 0.20,
+    }
 
     def __init__(self, calculator: Optional[QoSCostCalculator] = None) -> None:
         self.calculator = calculator or QoSCostCalculator()
@@ -59,10 +62,14 @@ class BraessValidator:
         active_flows: Sequence[ActiveFlow] = (),
     ) -> BraessResult:
         projected = self._project_state(link_metrics, current_path, candidate_path, flow_rate_bps)
-        candidate_after = self.calculator.evaluate(candidate_path, projected, flow_weights).cost
+        candidate_after = self.calculator.evaluate(
+            candidate_path, projected, flow_weights, requested_rate_bps=flow_rate_bps
+        ).cost
         current_cost = None
         if current_path:
-            current_cost = self.calculator.evaluate(current_path, link_metrics, flow_weights).cost
+            current_cost = self.calculator.evaluate(
+                current_path, link_metrics, flow_weights, requested_rate_bps=flow_rate_bps
+            ).cost
 
         before = self._aggregate_network_cost(link_metrics)
         after = self._aggregate_network_cost(projected)
@@ -77,8 +84,14 @@ class BraessValidator:
             if flow.criticality < 4:
                 continue
             try:
-                flow_before = self.calculator.evaluate(flow.path, link_metrics, flow.weights).cost
-                flow_after = self.calculator.evaluate(flow.path, projected, flow.weights).cost
+                flow_before = self.calculator.evaluate(
+                    flow.path, link_metrics, flow.weights,
+                    requested_rate_bps=flow.rate_bps,
+                ).cost
+                flow_after = self.calculator.evaluate(
+                    flow.path, projected, flow.weights,
+                    requested_rate_bps=flow.rate_bps,
+                ).cost
             except MissingMetricsError:
                 continue
             change = self._percent_change(flow_before, flow_after)
@@ -161,7 +174,10 @@ class BraessValidator:
         costs = []
         for index, sample in enumerate(complete):
             synthetic_edge = {(index, index + 1): sample}
-            costs.append(self.calculator.evaluate((index, index + 1), synthetic_edge, self.NETWORK_WEIGHTS).cost)
+            costs.append(self.calculator.evaluate(
+                (index, index + 1), synthetic_edge, self.NETWORK_WEIGHTS,
+                requested_rate_bps=sample.throughput_bps,
+            ).cost)
         return sum(costs) / len(costs)
 
     @staticmethod
@@ -173,4 +189,3 @@ class BraessValidator:
     @staticmethod
     def _result(safe, status, reason, current, projected, before, after, change, protected, utilization):
         return BraessResult(safe, status, reason, current, projected, before, after, change, protected, utilization)
-

@@ -1,0 +1,13 @@
+Patient gateway test mode on http://127.0.0.1:8091
+Traceback (most recent call last):
+  File "/mnt/c/Users/VICTUS/Downloads/MedRoute-main/MedRoute-main/patient_gateway.py", line 106, in <module>
+    main()
+  File "/mnt/c/Users/VICTUS/Downloads/MedRoute-main/MedRoute-main/patient_gateway.py", line 102, in main
+    ThreadingHTTPServer((args.host, args.port), handler_factory(gateway)).serve_forever()
+  File "/home/victus323/.pyenv/versions/3.10.14/lib/python3.10/socketserver.py", line 452, in __init__
+    self.server_bind()
+  File "/home/victus323/.pyenv/versions/3.10.14/lib/python3.10/http/server.py", line 137, in server_bind
+    socketserver.TCPServer.server_bind(self)
+  File "/home/victus323/.pyenv/versions/3.10.14/lib/python3.10/socketserver.py", line 466, in server_bind
+    self.socket.bind(self.server_address)
+OSError: [Errno 98] Address already in use

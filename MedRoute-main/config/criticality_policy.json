@@ -1,0 +1,21 @@
+{
+  "name": "demo-vitals-policy-v1",
+  "purpose": "Routing demonstration only; not a clinical decision rule",
+  "default_criticality": 3,
+  "rules": [
+    {
+      "metric": "priority_signal",
+      "operator": ">=",
+      "threshold": 5,
+      "criticality": 5,
+      "reason": "Upstream test source requested emergency routing priority"
+    },
+    {
+      "metric": "priority_signal",
+      "operator": ">=",
+      "threshold": 4,
+      "criticality": 4,
+      "reason": "Upstream test source requested high routing priority"
+    }
+  ]
+}

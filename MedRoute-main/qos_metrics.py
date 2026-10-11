@@ -25,6 +25,7 @@ class LinkMetrics:
     capacity_bps: float = 100_000_000.0
     timestamp: float = 0.0
     sample_source: str = "openflow+lldp"
+    capacity_source: str = "default"
 
     def __post_init__(self) -> None:
         for field_name in ("latency_ms", "jitter_ms", "packet_loss_pct", "utilization_pct"):
@@ -35,6 +36,10 @@ class LinkMetrics:
             raise ValueError("packet_loss_pct cannot exceed 100")
         if self.utilization_pct is not None and self.utilization_pct > 100:
             raise ValueError("utilization_pct cannot exceed 100")
+        if self.capacity_bps <= 0:
+            raise ValueError("capacity_bps must be positive")
+        if self.throughput_bps < 0 or self.available_bandwidth_bps < 0:
+            raise ValueError("throughput and available bandwidth cannot be negative")
 
     @property
     def complete(self) -> bool:
@@ -51,6 +56,9 @@ class PathMetrics:
     utilization_pct: float
     throughput_bps: float
     available_bandwidth_bps: float
+    capacity_bps: float
+    requested_rate_bps: float
+    demand_adequacy_ratio: float
 
 
 @dataclass(frozen=True)
@@ -84,6 +92,7 @@ class MetricNormalizer:
         "jitter": 50.0,        # milliseconds, path root-sum-square
         "loss": 5.0,           # percent, end-to-end
         "utilization": 100.0,  # percent, path bottleneck
+        "throughput": 1.0,     # requested rate / measured residual capacity
     }
 
     def normalize(self, metrics: PathMetrics) -> Dict[str, float]:
@@ -92,6 +101,7 @@ class MetricNormalizer:
             "jitter": metrics.jitter_ms,
             "loss": metrics.packet_loss_pct,
             "utilization": metrics.utilization_pct,
+            "throughput": metrics.demand_adequacy_ratio,
         }
         return {
             name: min(1.0, max(0.0, value / self.REFERENCE_LIMITS[name]))
@@ -108,24 +118,37 @@ class QoSCostCalculator:
         return tuple(zip(path, path[1:]))
 
     def aggregate_path(
-        self, path: Sequence[int], link_metrics: Mapping[Edge, LinkMetrics]
+        self, path: Sequence[int], link_metrics: Mapping[Edge, LinkMetrics],
+        requested_rate_bps: float = 0.0,
     ) -> PathMetrics:
         edges = self.path_edges(path)
         if not edges:
-            return PathMetrics(0.0, 0.0, 0.0, 0.0, 0.0, float("inf"))
+            return PathMetrics(
+                0.0, 0.0, 0.0, 0.0, 0.0, float("inf"), float("inf"),
+                requested_rate_bps, 0.0,
+            )
         missing = [edge for edge in edges if edge not in link_metrics or not link_metrics[edge].complete]
         if missing:
             raise MissingMetricsError("Incomplete measured metrics for links: {}".format(missing))
         samples = [link_metrics[edge] for edge in edges]
         delivery_probability = math.prod(1.0 - sample.packet_loss_pct / 100.0 for sample in samples)  # type: ignore[operator]
         positive_throughputs = [sample.throughput_bps for sample in samples if sample.throughput_bps > 0]
+        residual = min(sample.available_bandwidth_bps for sample in samples)
+        capacity = min(sample.capacity_bps for sample in samples)
+        demand_ratio = (
+            max(0.0, requested_rate_bps) / max(residual, 1.0)
+            if requested_rate_bps > 0 else 0.0
+        )
         return PathMetrics(
             latency_ms=sum(sample.latency_ms for sample in samples),  # type: ignore[arg-type]
             jitter_ms=math.sqrt(sum(sample.jitter_ms ** 2 for sample in samples)),  # type: ignore[operator]
             packet_loss_pct=100.0 * (1.0 - delivery_probability),
             utilization_pct=max(sample.utilization_pct for sample in samples),  # type: ignore[arg-type]
             throughput_bps=min(positive_throughputs) if positive_throughputs else 0.0,
-            available_bandwidth_bps=min(sample.available_bandwidth_bps for sample in samples),
+            available_bandwidth_bps=residual,
+            capacity_bps=capacity,
+            requested_rate_bps=max(0.0, requested_rate_bps),
+            demand_adequacy_ratio=demand_ratio,
         )
 
     def evaluate(
@@ -133,13 +156,14 @@ class QoSCostCalculator:
         path: Sequence[int],
         link_metrics: Mapping[Edge, LinkMetrics],
         weights: Mapping[str, float],
+        requested_rate_bps: float = 0.0,
     ) -> PathEvaluation:
         expected = set(self.normalizer.REFERENCE_LIMITS)
         if set(weights) != expected:
             raise ValueError("weights must contain exactly {}".format(sorted(expected)))
         if not math.isclose(sum(weights.values()), 1.0, abs_tol=1e-9):
             raise ValueError("QoS weights must sum to 1.0")
-        metrics = self.aggregate_path(path, link_metrics)
+        metrics = self.aggregate_path(path, link_metrics, requested_rate_bps)
         normalized = self.normalizer.normalize(metrics)
         cost = sum(float(weights[name]) * normalized[name] for name in expected)
         return PathEvaluation(tuple(path), metrics, normalized, dict(weights), cost)
@@ -147,4 +171,3 @@ class QoSCostCalculator:
 
 def metric_age_seconds(metric: LinkMetrics, now: Optional[float] = None) -> float:
     return (now or time.time()) - metric.timestamp
-

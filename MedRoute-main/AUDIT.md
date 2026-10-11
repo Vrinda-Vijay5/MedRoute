@@ -1,5 +1,8 @@
 # Original repository audit
 
+> Historical baseline: this is not the current implementation status. See
+> `docs/implementation_status.md` and `README.md` for the October follow-up.
+
 This audit records the state found before the 6 October 2026 continuation work.
 It separates source-code presence from verified behavior.
 
@@ -50,4 +53,3 @@ module, Braess validator, or automated experiment runner.
 - Package download was blocked by the current network policy.
 - The supplied directory contains no `.git` directory. It is an exported copy,
   so history, branches, remotes, and a meaningful `git status` are unavailable.
-

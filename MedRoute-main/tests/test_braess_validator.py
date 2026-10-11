@@ -4,7 +4,8 @@ from braess_validator import ActiveFlow, BraessValidator
 from qos_metrics import LinkMetrics
 
 
-WEIGHTS = {"latency": 0.35, "jitter": 0.30, "loss": 0.25, "utilization": 0.10}
+WEIGHTS = {"latency": 0.30, "jitter": 0.25, "loss": 0.25,
+           "utilization": 0.10, "throughput": 0.10}
 
 
 def measured(latency, jitter, loss, utilization):
@@ -49,7 +50,8 @@ class BraessValidatorTests(unittest.TestCase):
             "ecg-protected", (1, 2, 4), "ECG", 5, 500_000, WEIGHTS
         )
         imaging_weights = {
-            "latency": 0.15, "jitter": 0.05, "loss": 0.20, "utilization": 0.60,
+            "latency": 0.10, "jitter": 0.05, "loss": 0.15,
+            "utilization": 0.30, "throughput": 0.40,
         }
 
         central = self.validator.validate(

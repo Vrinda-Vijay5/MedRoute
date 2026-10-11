@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/home/victus323/.pyenv/versions/3.10.14/envs/medroute-ryu/bin/ryu-manager", line 3, in <module>
+    from ryu.cmd.manager import main
+  File "/home/victus323/.pyenv/versions/medroute-ryu/lib/python3.10/site-packages/ryu/cmd/manager.py", line 33, in <module>
+    from ryu.app import wsgi
+  File "/home/victus323/.pyenv/versions/medroute-ryu/lib/python3.10/site-packages/ryu/app/wsgi.py", line 109, in <module>
+    class _AlreadyHandledResponse(Response):
+  File "/home/victus323/.pyenv/versions/medroute-ryu/lib/python3.10/site-packages/ryu/app/wsgi.py", line 111, in _AlreadyHandledResponse
+    from eventlet.wsgi import ALREADY_HANDLED
+ImportError: cannot import name 'ALREADY_HANDLED' from 'eventlet.wsgi' (/home/victus323/.pyenv/versions/medroute-ryu/lib/python3.10/site-packages/eventlet/wsgi.py)

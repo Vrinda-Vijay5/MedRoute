@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MedRoute Live Operations</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div><span class="eyebrow">SDN healthcare routing</span><h1>MedRoute <em>Live Operations</em></h1></div>
+    <div class="header-status"><span id="mode" class="pill">MODE —</span><span id="connection" class="pill bad">DISCONNECTED</span><time id="clock">—</time></div>
+  </header>
+  <main>
+    <section class="hero-grid">
+      <article class="panel topology-panel"><div class="panel-title"><h2>Discovered topology</h2><span class="tag measured">MEASURED</span></div><div id="topology" class="topology"></div><div id="topology-note" class="muted"></div></article>
+      <article class="panel"><div class="panel-title"><h2>Operating state</h2><span class="tag configured">CONFIGURED + LIVE</span></div><div id="status" class="status-list"></div></article>
+    </section>
+    <section class="panel"><div class="panel-title"><h2>Network telemetry</h2><span class="tag measured">MEASURED / DERIVED</span></div><div class="table-wrap"><table><thead><tr><th>Link</th><th>Latency</th><th>Jitter</th><th>Loss</th><th>Utilization</th><th>Carried rate</th><th>Residual estimate</th><th>Capacity</th><th>Freshness</th></tr></thead><tbody id="metrics"></tbody></table></div></section>
+    <section class="split">
+      <article class="panel"><div class="panel-title"><h2>Active healthcare flows</h2><span class="tag derived">POLICY</span></div><div id="flows" class="cards"></div></article>
+      <article class="panel"><div class="panel-title"><h2>Patient / wearable source</h2><span id="patient-kind" class="tag test">NO SOURCE</span></div><div id="patients" class="cards"></div></article>
+    </section>
+    <section class="split">
+      <article class="panel"><div class="panel-title"><h2>Route rationale</h2><span class="tag derived">DERIVED COST</span></div><div id="decisions" class="cards"></div></article>
+      <article class="panel"><div class="panel-title"><h2>Route-safety gate</h2><span class="tag projected">PROJECTED</span></div><div id="safety" class="cards"></div></article>
+    </section>
+    <section class="split">
+      <article class="panel"><div class="panel-title"><h2>Forwarding changes</h2><span class="tag measured">OPENFLOW EVENTS</span></div><div id="events" class="timeline"></div></article>
+      <article class="panel"><div class="panel-title"><h2>Experiment measurements</h2><span class="tag measured">SAVED EVIDENCE</span></div><div id="experiments" class="cards"></div></article>
+    </section>
+  </main>
+  <footer><span>Read-only dashboard • refreshes every 2 seconds</span><span id="updated">No data received</span></footer>
+  <script src="app.js"></script>
+</body>
+</html>

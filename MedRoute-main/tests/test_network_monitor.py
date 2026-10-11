@@ -100,7 +100,33 @@ class NetworkMonitorTests(unittest.TestCase):
         )
         metric = monitor.snapshot(include_stale=True)[(1, 2)]
         self.assertEqual(metric.capacity_bps, 100_000_000)
+        self.assertEqual(metric.capacity_source, "configured-testbed")
         self.assertEqual(metric.utilization_pct, 20.0)
+
+    def test_counter_reset_is_missing_interval_not_false_zero(self):
+        monitor = NetworkMonitor()
+        monitor.register_link(1, 2, 10, 20)
+        monitor.process_port_stats(1, [stat(10, 1000, 0, 10, 0)], timestamp=1.0)
+        monitor.process_port_stats(1, [stat(10, 10, 0, 1, 0)], timestamp=2.0)
+        self.assertEqual(monitor.diagnostics()["counter_resets"], 1)
+        self.assertEqual(monitor.diagnostics()["port_rates"], 0)
+
+    def test_skewed_counter_windows_are_rejected(self):
+        monitor = NetworkMonitor(max_counter_skew_seconds=0.5)
+        monitor.register_link(1, 2, 10, 20)
+        monitor.record_echo_rtt(1, 0.1, timestamp=1.0)
+        monitor.record_echo_rtt(2, 0.1, timestamp=1.0)
+        monitor.record_lldp_delay(1, 2, 0.001, timestamp=1.0)
+        monitor.record_lldp_delay(1, 2, 0.001, timestamp=1.1)
+        monitor.process_port_stats(1, [stat(10, 0, 0, 0, 0)], timestamp=1.0)
+        monitor.process_port_stats(2, [stat(20, 0, 0, 0, 0)], timestamp=1.0)
+        monitor.process_port_stats(1, [stat(10, 100, 0, 1, 0)], timestamp=2.0)
+        monitor.process_port_stats(2, [stat(20, 0, 100, 0, 1)], timestamp=3.0)
+        self.assertNotIn((1, 2), monitor.snapshot(include_stale=True))
+        self.assertIn(
+            "port_counter_windows_skewed",
+            monitor.readiness([(1, 2)], now=3.0).missing[(1, 2)],
+        )
 
 
 if __name__ == "__main__":

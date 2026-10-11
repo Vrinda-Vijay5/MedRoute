@@ -15,9 +15,16 @@ def build_flow_id(
     destination_ip: str,
     source_port: Optional[int] = None,
     destination_port: Optional[int] = None,
+    ip_protocol: Optional[int] = None,
 ) -> str:
-    """Build an inspectable flow key while retaining measured L4 ports."""
-    return "{}:{}->{}:{}".format(
+    """Build an inspectable five-tuple key.
+
+    Protocol is optional only for compatibility with old saved evidence. New
+    controller records always include it so TCP, UDP, and ICMP cannot collide.
+    """
+    prefix = "{}|".format(int(ip_protocol)) if ip_protocol is not None else ""
+    return "{}{}:{}->{}:{}".format(
+        prefix,
         source_ip,
         source_port if source_port is not None else 0,
         destination_ip,
@@ -62,32 +69,32 @@ class HealthcareTrafficClassifier:
     TRAFFIC_TYPES = {
         "ECG": {
             "class": "EMERGENCY", "criticality": 5, "udp_port": 5001,
-            "weights": {"latency": 0.35, "jitter": 0.30, "loss": 0.25, "utilization": 0.10},
+            "weights": {"latency": 0.30, "jitter": 0.25, "loss": 0.25, "utilization": 0.10, "throughput": 0.10},
             "reason": "Continuous life-critical waveform; late or missing samples reduce clinical value.",
         },
         "ICU": {
             "class": "CRITICAL", "criticality": 5, "udp_port": 5002,
-            "weights": {"latency": 0.35, "jitter": 0.25, "loss": 0.30, "utilization": 0.10},
+            "weights": {"latency": 0.30, "jitter": 0.20, "loss": 0.30, "utilization": 0.10, "throughput": 0.10},
             "reason": "Bedside alarms and vital signs require low delay and very high delivery reliability.",
         },
         "TELEMEDICINE": {
             "class": "HIGH", "criticality": 4, "udp_port": 5003,
-            "weights": {"latency": 0.35, "jitter": 0.35, "loss": 0.15, "utilization": 0.15},
+            "weights": {"latency": 0.30, "jitter": 0.30, "loss": 0.15, "utilization": 0.10, "throughput": 0.15},
             "reason": "Interactive audio/video quality is dominated by delay and jitter.",
         },
         "EHR": {
             "class": "HIGH", "criticality": 4, "udp_port": 5004,
-            "weights": {"latency": 0.20, "jitter": 0.10, "loss": 0.35, "utilization": 0.35},
+            "weights": {"latency": 0.18, "jitter": 0.07, "loss": 0.35, "utilization": 0.20, "throughput": 0.20},
             "reason": "Clinical records must arrive reliably; modest delay variation is tolerable.",
         },
         "IMAGING": {
             "class": "MEDIUM", "criticality": 3, "udp_port": 5005,
-            "weights": {"latency": 0.15, "jitter": 0.05, "loss": 0.20, "utilization": 0.60},
+            "weights": {"latency": 0.10, "jitter": 0.05, "loss": 0.15, "utilization": 0.30, "throughput": 0.40},
             "reason": "Large image transfers benefit most from uncongested, high-available-bandwidth paths.",
         },
         "CCTV": {
             "class": "LOW", "criticality": 1, "udp_port": 5006,
-            "weights": {"latency": 0.20, "jitter": 0.25, "loss": 0.15, "utilization": 0.40},
+            "weights": {"latency": 0.15, "jitter": 0.20, "loss": 0.15, "utilization": 0.25, "throughput": 0.25},
             "reason": "Routine surveillance yields capacity to clinical traffic while retaining usable video.",
         },
     }
@@ -99,7 +106,7 @@ class HealthcareTrafficClassifier:
             return {
                 "traffic_type": name, "class": "UNKNOWN", "criticality": 0,
                 "udp_port": None,
-                "weights": {"latency": 0.25, "jitter": 0.25, "loss": 0.25, "utilization": 0.25},
+                "weights": {"latency": 0.20, "jitter": 0.20, "loss": 0.20, "utilization": 0.20, "throughput": 0.20},
                 "reason": "Unknown traffic receives a neutral profile.",
             }
         result = deepcopy(self.TRAFFIC_TYPES[name])

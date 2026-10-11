@@ -91,7 +91,9 @@ class RoutingEngine:
         evaluations: List[PathEvaluation] = []
         for path in candidates:
             try:
-                evaluations.append(self.calculator.evaluate(path, link_metrics, weights))  # type: ignore[arg-type]
+                evaluations.append(self.calculator.evaluate(
+                    path, link_metrics, weights, requested_rate_bps=flow_rate_bps
+                ))  # type: ignore[arg-type]
             except MissingMetricsError:
                 continue
         if not evaluations:
@@ -174,7 +176,10 @@ class RoutingEngine:
         n = evaluation.normalized
         return (
             "PATH {} | latency={:.3f} ms jitter={:.3f} ms loss={:.3f}% "
-            "utilization={:.3f}% | normalized={} | cost={:.6f}"
+            "utilization={:.3f}% carried={:.0f}bps residual={:.0f}bps "
+            "requested={:.0f}bps adequacy_ratio={:.4f} | normalized={} | cost={:.6f}"
         ).format("->".join(map(str, evaluation.path)), m.latency_ms, m.jitter_ms,
-                 m.packet_loss_pct, m.utilization_pct,
+                 m.packet_loss_pct, m.utilization_pct, m.throughput_bps,
+                 m.available_bandwidth_bps, m.requested_rate_bps,
+                 m.demand_adequacy_ratio,
                  {name: round(value, 6) for name, value in n.items()}, evaluation.cost)

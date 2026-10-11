@@ -6,12 +6,10 @@ from unittest.mock import patch
 
 from braess_experiment import (
     _background_iperf_command,
-    _install_icmp_measurement_path,
+    _capture_flow_tables,
     _latest_selected_path,
-    _measurement_cookie,
     _prepare_trial_topology,
     _read_completed_udp_report,
-    _remove_icmp_measurement_path,
     _wait_for_telemetry_ready,
 )
 from storage import ResultsStore
@@ -38,7 +36,8 @@ class FakeHost:
 
 
 class FakeProbeNode:
-    def __init__(self, ip_address=None):
+    def __init__(self, name, ip_address=None):
+        self.name = name
         self.ip_address = ip_address
         self.commands = []
 
@@ -51,7 +50,9 @@ class FakeProbeNode:
 
 
 class FakeProbeNetwork(dict):
-    pass
+    @property
+    def switches(self):
+        return [node for name, node in self.items() if name.startswith("s")]
 
 
 class FakeLifecycleNetwork:
@@ -169,46 +170,19 @@ class BraessExperimentLifecycleTests(unittest.TestCase):
                 (1, 2, 4),
             )
 
-    def test_probe_rules_are_host_scoped_removed_and_trial_unique(self):
+    def test_flow_table_capture_is_read_only(self):
         net = FakeProbeNetwork({
-            "h1": FakeProbeNode("10.0.0.1"),
-            "h4": FakeProbeNode("10.0.0.4"),
-            "s1": FakeProbeNode(),
-            "s2": FakeProbeNode(),
-            "s4": FakeProbeNode(),
+            "s1": FakeProbeNode("s1"),
+            "s2": FakeProbeNode("s2"),
+            "s4": FakeProbeNode("s4"),
         })
-        first_cookie = _measurement_cookie(1000.0)
-        second_cookie = _measurement_cookie(1001.0)
-        self.assertNotEqual(first_cookie, second_cookie)
-
-        with patch("braess_experiment._output_port", return_value=7):
-            switches = _install_icmp_measurement_path(
-                net, (1, 2, 4), "h1", "h4", first_cookie
-            )
-        self.assertEqual(switches, ("s1", "s2", "s4"))
-        add_commands = [
-            command for switch in switches for command in net[switch].commands
-            if " add-flow " in command
-        ]
-        self.assertEqual(len(add_commands), 6)
-        for command in add_commands:
-            self.assertIn("priority=300,dl_type=0x0800,nw_proto=1", command)
-            self.assertIn("idle_timeout=5", command)
-            self.assertIn("hard_timeout=10", command)
-            self.assertTrue(
-                "nw_src=10.0.0.1,nw_dst=10.0.0.4" in command
-                or "nw_src=10.0.0.4,nw_dst=10.0.0.1" in command
-            )
-
-        _remove_icmp_measurement_path(net, switches, first_cookie)
-        for switch in switches:
-            delete_command = net[switch].commands[-1]
-            self.assertIn(" del-flows ", delete_command)
-            self.assertIn(
-                "cookie={:#x}/0xffffffffffffffff".format(first_cookie),
-                delete_command,
-            )
-            self.assertNotIn("cookie={:#x}".format(second_cookie), delete_command)
+        captured = _capture_flow_tables(net)
+        self.assertEqual(set(captured), {"s1", "s2", "s4"})
+        for switch in net.switches:
+            self.assertEqual(len(switch.commands), 1)
+            self.assertIn(" dump-flows ", switch.commands[0])
+            self.assertNotIn(" add-flow ", switch.commands[0])
+            self.assertNotIn(" del-flows ", switch.commands[0])
 
 
 if __name__ == "__main__":
